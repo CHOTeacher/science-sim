@@ -1,0 +1,744 @@
+<title>전류가 만드는 자기장</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+  :root{
+    --bg:#12161d;
+    --panel:#1b212b;
+    --panel-2:#222a35;
+    --line:rgba(255,255,255,.08);
+    --line-soft:rgba(255,255,255,.04);
+    --ink:#eef1ea;
+    --ink-dim:#93a0ac;
+    --ink-faint:#5c6672;
+    --current:#f0a868;
+    --current-bright:#ffd19b;
+    --field:#5fd8cf;
+    --pole-n:#e2604a;
+    --pole-s:#4f8fe0;
+    --focus:#f0a868;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Noto Sans KR',sans-serif;
+    background-image:
+      linear-gradient(var(--line-soft) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+    background-size:34px 34px;
+  }
+
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 20px 40px;}
+
+  header{margin-bottom:18px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:.14em;
+    color:var(--field);
+    text-transform:uppercase;
+    margin:0 0 8px;
+  }
+  h1{
+    font-family:'Black Han Sans',sans-serif;
+    font-weight:400;
+    font-size:clamp(28px,4vw,42px);
+    margin:0 0 8px;
+    text-wrap:balance;
+    letter-spacing:.01em;
+  }
+  header p{
+    margin:0;
+    color:var(--ink-dim);
+    font-size:15px;
+    max-width:62ch;
+    line-height:1.6;
+  }
+
+  nav.tabs{
+    display:flex;
+    gap:8px;
+    margin:22px 0 16px;
+    flex-wrap:wrap;
+  }
+  .tab-btn{
+    font-family:'Noto Sans KR',sans-serif;
+    font-weight:700;
+    font-size:15px;
+    color:var(--ink-dim);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:11px 18px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    transition:background .15s,color .15s,border-color .15s,transform .1s;
+  }
+  .tab-btn .n{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--ink-faint);
+    border:1px solid var(--line);
+    border-radius:5px;
+    padding:1px 5px;
+  }
+  .tab-btn:hover{border-color:var(--ink-faint);color:var(--ink);}
+  .tab-btn:active{transform:translateY(1px);}
+  .tab-btn.active{
+    background:var(--current);
+    color:#20140a;
+    border-color:var(--current);
+  }
+  .tab-btn.active .n{border-color:rgba(0,0,0,.25);color:#3a2410;}
+  .tab-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+
+  .layout{
+    display:grid;
+    grid-template-columns:1fr 320px;
+    gap:16px;
+  }
+  @media (max-width:860px){
+    .layout{grid-template-columns:1fr;}
+  }
+
+  .stage-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:6px;
+    overflow:hidden;
+  }
+  .stage-card svg{
+    display:block;
+    width:100%;
+    height:auto;
+  }
+  .stage-card.flip #stageContent{animation:pulse .5s ease;}
+  @keyframes pulse{
+    0%{opacity:1;}
+    35%{opacity:.35;}
+    100%{opacity:1;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .stage-card.flip #stageContent{animation:none;}
+  }
+
+  .dock{display:flex;flex-direction:column;gap:14px;}
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:16px 18px;
+  }
+  .card h2{
+    font-size:12px;
+    font-family:'IBM Plex Mono',monospace;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+    color:var(--ink-faint);
+    margin:0 0 12px;
+  }
+
+  .dir-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .dir-btn{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    color:var(--ink);
+    font-family:'Noto Sans KR',sans-serif;
+    font-weight:700;
+    font-size:14px;
+    padding:14px 8px;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+    transition:background .15s,border-color .15s,color .15s;
+  }
+  .dir-btn .glyph{font-size:20px;line-height:1;font-family:'IBM Plex Mono',monospace;}
+  .dir-btn:hover{border-color:var(--field);}
+  .dir-btn.active{
+    /* a tinted panel + ring, not a solid orange fill — the option icons are
+       drawn in the current (orange) color, so filling the button orange too
+       would make the icon disappear against its own background. */
+    background:rgba(95,216,207,.14);
+    border-color:var(--field);
+    color:var(--ink);
+    box-shadow:0 0 0 1px var(--field) inset, 0 0 14px rgba(95,216,207,.28);
+  }
+  .dir-btn:focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+
+
+  .explain h2{color:var(--field);}
+  .explain .headline{
+    font-weight:700;
+    font-size:15px;
+    margin:0 0 8px;
+    color:var(--ink);
+  }
+  .explain p{
+    margin:0;
+    font-size:13.5px;
+    line-height:1.7;
+    color:var(--ink-dim);
+  }
+  .explain .rule-icon{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-top:12px;
+    padding-top:12px;
+    border-top:1px dashed var(--line);
+  }
+  .explain .rule-icon svg{flex:none;}
+  .explain .rule-icon span{font-size:12px;color:var(--ink-faint);line-height:1.5;}
+
+  footer.legend{
+    display:flex;
+    flex-wrap:wrap;
+    gap:18px;
+    margin-top:18px;
+    padding-top:16px;
+    border-top:1px solid var(--line);
+    font-size:12.5px;
+    color:var(--ink-dim);
+  }
+  footer.legend .item{display:flex;align-items:center;gap:7px;}
+  footer.legend .swatch{width:16px;height:16px;border-radius:4px;flex:none;}
+
+  .badge-n, .badge-s{
+    font-family:'IBM Plex Mono',monospace;
+    font-weight:600;
+  }
+  .fill-current{fill:var(--current);}
+  .fill-current-bright{fill:var(--current-bright);}
+  .stroke-current{stroke:var(--current);}
+  .fill-field{fill:var(--field);}
+  .stroke-field{stroke:var(--field);}
+  .fill-n{fill:var(--pole-n);}
+  .fill-s{fill:var(--pole-s);}
+  .stroke-ink{stroke:var(--ink-dim);}
+  .fill-ink{fill:var(--ink);}
+  .fill-ink-dim{fill:var(--ink-dim);}
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">중학교 과학2 · Ⅶ. 전기와 자기 · 전류가 만드는 자기장</p>
+    <h1>전류 방향과 자기장 시뮬레이션</h1>
+    <p>전류의 방향을 바꾸면 그 주위에 생기는 자기장의 방향도 함께 바뀝니다. 오른쪽 <b style="color:var(--ink)">전류 방향</b> 버튼을 눌러 직선 도선·솔레노이드 주위의 자기장이 어떻게 반대로 뒤집히는지 직접 확인해 보세요.</p>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab-btn" data-tab="straight"><span class="n">01</span>직선 전류</button>
+    <button class="tab-btn" data-tab="solenoid"><span class="n">02</span>코일(솔레노이드)</button>
+  </nav>
+
+  <div class="layout">
+    <div class="stage-card" id="stageCard">
+      <svg id="stage" viewBox="0 0 900 560" role="img" aria-labelledby="stageTitle">
+        <title id="stageTitle">전류와 자기장 모식도</title>
+        <g id="stageContent"></g>
+      </svg>
+    </div>
+
+    <div class="dock">
+      <div class="card">
+        <h2 id="dirHeading">전류의 방향</h2>
+        <div class="dir-grid" id="dirGrid"></div>
+      </div>
+
+      <div class="card explain">
+        <h2>오른손 법칙으로 확인하기</h2>
+        <p class="headline" id="explainHeadline"></p>
+        <p id="explainBody"></p>
+        <div class="rule-icon">
+          <svg width="46" height="46" viewBox="0 0 46 46">
+            <circle cx="23" cy="23" r="15" fill="none" class="stroke-field" stroke-width="2.4" stroke-dasharray="70 24" id="ruleArc"/>
+            <rect id="ruleThumb" x="20" y="6" width="6" height="14" rx="3" class="fill-current"/>
+          </svg>
+          <span>엄지 = 전류 방향<br>말아 쥔 네 손가락 = 자기장 방향</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="legend">
+    <div class="item"><span class="swatch" style="background:var(--current)"></span>전류가 흐르는 도선 / 전류 방향</div>
+    <div class="item"><span class="swatch" style="background:var(--field)"></span>자기장의 방향</div>
+    <div class="item"><span class="swatch" style="background:var(--pole-n)"></span>N극</div>
+    <div class="item"><span class="swatch" style="background:var(--pole-s)"></span>S극</div>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NS = "http://www.w3.org/2000/svg";
+  const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const D2R = Math.PI/180;
+
+  const state = { tab:'straight', dir:1 };
+
+  // ---------- small svg helpers ----------
+  function pt(cx,cy,rx,ry,thetaDeg){
+    const t = thetaDeg*D2R;
+    return [cx+rx*Math.cos(t), cy+ry*Math.sin(t)];
+  }
+  function cubicBezier(P0,P1,P2,P3,t){
+    // point and tangent of a cubic bezier at parameter t, used to place
+    // markers (arrows, compass needles) exactly on a drawn curve and aligned
+    // with its direction, instead of guessing a position/angle by eye.
+    const mt=1-t;
+    const x = mt*mt*mt*P0[0] + 3*mt*mt*t*P1[0] + 3*mt*t*t*P2[0] + t*t*t*P3[0];
+    const y = mt*mt*mt*P0[1] + 3*mt*mt*t*P1[1] + 3*mt*t*t*P2[1] + t*t*t*P3[1];
+    const dx = 3*mt*mt*(P1[0]-P0[0]) + 6*mt*t*(P2[0]-P1[0]) + 3*t*t*(P3[0]-P2[0]);
+    const dy = 3*mt*mt*(P1[1]-P0[1]) + 6*mt*t*(P2[1]-P1[1]) + 3*t*t*(P3[1]-P2[1]);
+    return {x,y,dx,dy};
+  }
+  function arrowHead(x,y,angleDeg,size,cls){
+    const s=size;
+    return `<path d="M ${-s*0.75} ${-s*0.55} L ${s*0.85} 0 L ${-s*0.75} ${s*0.55} Z" transform="translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${angleDeg.toFixed(1)})" class="${cls}"/>`;
+  }
+  function compass(x,y,angleDeg,r){
+    // needle is authored pointing along local +X (angle 0), matching arrowHead's
+    // convention, so passing the same atan2(dy,dx) angle used for field arrows
+    // rotates the N tip to the correct field direction without any offset.
+    r = r||16;
+    return `
+      <g transform="translate(${x},${y})">
+        <circle r="${r}" fill="var(--panel-2)" class="stroke-ink" stroke-width="1.4"/>
+        <g transform="rotate(${angleDeg.toFixed(1)})">
+          <path d="M ${r*0.72} 0 L 0 ${r*0.22} L ${-r*0.72} 0 L 0 ${-r*0.22} Z" class="fill-n"/>
+          <path d="M ${r*0.72} 0 L 0 ${r*0.22} L 0 ${-r*0.22} Z" class="fill-n"/>
+          <path d="M ${-r*0.72} 0 L 0 ${r*0.22} L 0 ${-r*0.22} Z" class="fill-s"/>
+        </g>
+        <circle r="2.4" class="fill-ink"/>
+      </g>`;
+  }
+  function motionDots(pathD, count, dur, cls, size){
+    if (REDUCED){
+      // static single indicator instead of animation
+      return '';
+    }
+    let out='';
+    for(let i=0;i<count;i++){
+      const begin = (-(i*dur/count)).toFixed(2)+'s';
+      out += `<circle r="${size}" class="${cls}">
+        <animateMotion dur="${dur}s" begin="${begin}" repeatCount="indefinite" path="${pathD}"/>
+      </circle>`;
+    }
+    return out;
+  }
+  function motionArrows(pathD, count, dur, cls, size){
+    if (REDUCED) return '';
+    // an arrowhead (authored pointing along local +X, same as arrowHead())
+    // riding the path with rotate="auto" so it both moves AND keeps pointing
+    // the way the current is flowing at every point along the path.
+    const s = size;
+    let out='';
+    for(let i=0;i<count;i++){
+      const begin = (-(i*dur/count)).toFixed(2)+'s';
+      out += `<path d="M ${-s*0.75} ${-s*0.55} L ${s*0.85} 0 L ${-s*0.75} ${s*0.55} Z" class="${cls}">
+        <animateMotion dur="${dur}s" begin="${begin}" repeatCount="indefinite" path="${pathD}" rotate="auto"/>
+      </path>`;
+    }
+    return out;
+  }
+  function miniLoopGlyph(rightIsN){
+    // a single coil turn in the same 3D style as the real coil (solid front
+    // arc bulging right, dashed back arc bulging left) with an arrowhead
+    // riding around it — used as the icon on the direction-option buttons
+    // so the option shows the current's own path, not just a plain arrow.
+    const cx=22, cy=24, rx=14, ry=18;
+    const sweep = rightIsN ? 1 : 0;
+    const loopPath = `M ${cx} ${cy-ry} A ${rx} ${ry} 0 0 ${sweep} ${cx} ${cy+ry} A ${rx} ${ry} 0 0 ${sweep} ${cx} ${cy-ry}`;
+    const backD = `M ${cx} ${cy-ry} A ${rx} ${ry} 0 0 0 ${cx} ${cy+ry}`;
+    const frontD = `M ${cx} ${cy-ry} A ${rx} ${ry} 0 0 1 ${cx} ${cy+ry}`;
+    const fallback = REDUCED
+      ? arrowHead(cx+rx*0.86, cy, rightIsN?90:-90, 10, 'fill-current-bright')
+        + arrowHead(cx-rx*0.86, cy, rightIsN?-90:90, 10, 'fill-current-bright')
+      : '';
+    return `<svg width="44" height="48" viewBox="0 0 44 48" style="display:block">
+      <path d="${backD}" fill="none" class="stroke-current" stroke-width="3" stroke-dasharray="3 3" opacity=".45"/>
+      <path d="${frontD}" fill="none" class="stroke-current" stroke-width="3.4" stroke-linecap="round"/>
+      ${motionArrows(loopPath, 1, 3, 'fill-current-bright', 11)}
+      ${fallback}
+    </svg>`;
+  }
+  function batterySymbol(x,y,dir,vertical){
+    // battery symbol convention: the (+) terminal is the long, thin line; the
+    // (-) terminal is the short, thick line. Conventional current flows OUT of
+    // (+) through the external circuit and back into (-), so which physical
+    // terminal is "+" is derived from which way current already flows in the
+    // wire/coil (set by `dir`), not chosen independently.
+    const PLUS = {l:14,w:2,label:'+'}, MINUS = {l:8,w:5,label:'−'};
+    if(vertical){
+      // leadTop wires the top terminal to the top of the wire, leadBottom wires
+      // the bottom terminal to the bottom of the wire. For dir=1 current exits
+      // the wire at the top (flows bottom→top), so it must re-enter the
+      // battery at the bottom terminal — making the BOTTOM terminal (+).
+      const top = dir===1 ? MINUS : PLUS;
+      const bottom = dir===1 ? PLUS : MINUS;
+      return `
+        <g transform="translate(${x},${y})">
+          <line x1="0" y1="-26" x2="0" y2="-9" class="stroke-ink" stroke-width="2.4"/>
+          <line x1="${-top.l}" y1="-9" x2="${top.l}" y2="-9" class="stroke-ink" stroke-width="${top.w}"/>
+          <line x1="${-bottom.l}" y1="9" x2="${bottom.l}" y2="9" class="stroke-ink" stroke-width="${bottom.w}"/>
+          <line x1="0" y1="9" x2="0" y2="26" class="stroke-ink" stroke-width="2.4"/>
+          <text x="16" y="-6" class="fill-ink-dim badge-n" font-size="13">${top.label}</text>
+          <text x="16" y="14" class="fill-ink-dim badge-n" font-size="13">${bottom.label}</text>
+        </g>`;
+    }
+    // leadLeft wires the left terminal to the left end of the coil, leadRight
+    // wires the right terminal to the right end. For dir=1 current flows
+    // left→right through the coil, exiting at the right, so it re-enters
+    // the battery at the right terminal — making the LEFT terminal (+).
+    const left = dir===1 ? PLUS : MINUS;
+    const right = dir===1 ? MINUS : PLUS;
+    return `
+      <g transform="translate(${x},${y})">
+        <line x1="-26" y1="0" x2="-9" y2="0" class="stroke-ink" stroke-width="2.4"/>
+        <line x1="-9" y1="${-left.l}" x2="-9" y2="${left.l}" class="stroke-ink" stroke-width="${left.w}"/>
+        <line x1="9" y1="${-right.l}" x2="9" y2="${right.l}" class="stroke-ink" stroke-width="${right.w}"/>
+        <line x1="9" y1="0" x2="26" y2="0" class="stroke-ink" stroke-width="2.4"/>
+        <text x="-9" y="-20" text-anchor="middle" class="fill-ink-dim badge-n" font-size="13">${left.label}</text>
+        <text x="9" y="-20" text-anchor="middle" class="fill-ink-dim badge-n" font-size="13">${right.label}</text>
+      </g>`;
+  }
+  function poleBadge(x,y,letter){
+    const cls = letter==='N' ? 'fill-n' : 'fill-s';
+    return `
+      <g transform="translate(${x},${y})">
+        <circle r="17" class="${cls}"/>
+        <text text-anchor="middle" dominant-baseline="central" fill="#0c0f14" font-family="IBM Plex Mono" font-weight="600" font-size="16">${letter}</text>
+      </g>`;
+  }
+
+  // ---------- TAB 1 : straight wire ----------
+  function renderStraight(dir){
+    const cx=450, top=86, bottom=474;
+    const rings=[{cy:196,rx:150,ry:42},{cy:300,rx:172,ry:48},{cy:404,rx:150,ry:42}];
+    let back='', front='', arrows='', compasses='';
+
+    // the near-viewer (front) side of each ring is drawn at the BOTTOM of its
+    // ellipse — the path from the right point (0°) to the left point (180°)
+    // that sweeps through the bottom — and the far (back) side at the top.
+    rings.forEach(r=>{
+      const p0=pt(cx,r.cy,r.rx,r.ry,0), p180=pt(cx,r.cy,r.rx,r.ry,180);
+      front += `<path d="M ${p0[0]},${p0[1]} A ${r.rx} ${r.ry} 0 0 1 ${p180[0]},${p180[1]}" fill="none" class="stroke-field" stroke-width="3.6" opacity="1"/>`;
+      back += `<path d="M ${p180[0]},${p180[1]} A ${r.rx} ${r.ry} 0 0 1 ${p0[0]},${p0[1]}" fill="none" class="stroke-field" stroke-width="3" stroke-dasharray="4 4" opacity=".65"/>`;
+
+      // right-hand rule: thumb = current direction, curled fingers = field
+      // direction. Verified so that at the front (bottom, nearest viewer)
+      // point, current flowing up gives a field arrow pointing right — and
+      // reversing the current (dir=-1) must reverse every field arrow.
+      [30,90,150,210,270,330].forEach(theta=>{
+        const t = theta*D2R;
+        const [x,y] = pt(cx,r.cy,r.rx,r.ry,theta);
+        let dx = r.rx*Math.sin(t), dy = -r.ry*Math.cos(t);
+        if(dir===-1){ dx=-dx; dy=-dy; }
+        const ang = Math.atan2(dy,dx)/D2R;
+        arrows += arrowHead(x,y,ang,17,'fill-field');
+      });
+    });
+
+    // compasses only on the front (solid-line) point of each ring — the
+    // dashed back arc is the hidden far side of the wire and isn't where a
+    // real compass would be placed on the table in front of the viewer.
+    [rings[0], rings[1], rings[2]].forEach(ring=>{
+      const t=90*D2R;
+      const [x,y]=pt(cx,ring.cy,ring.rx,ring.ry,90);
+      let dx=ring.rx*Math.sin(t), dy=-ring.ry*Math.cos(t);
+      if(dir===-1){ dx=-dx; dy=-dy; }
+      const ang=Math.atan2(dy,dx)/D2R;
+      compasses += compass(x,y,ang,17);
+    });
+
+    const dotsPath = dir===1 ? `M ${cx} ${bottom} L ${cx} ${top}` : `M ${cx} ${top} L ${cx} ${bottom}`;
+    const tipY = dir===1 ? top : bottom;
+    const tipAng = dir===1 ? -90 : 90;
+
+    const battery = batterySymbol(700,300,dir,true);
+    const leadTop = `<path d="M ${cx} ${top} L ${cx} 60 L 700 60 L 700 274" fill="none" class="stroke-ink" stroke-width="2"/>`;
+    const leadBottom = `<path d="M ${cx} ${bottom} L ${cx} 500 L 700 500 L 700 326" fill="none" class="stroke-ink" stroke-width="2"/>`;
+
+    return `
+      ${leadTop}${leadBottom}${battery}
+      ${back}
+      <line x1="${cx}" y1="${top}" x2="${cx}" y2="${bottom}" class="stroke-current" stroke-width="7" stroke-linecap="round"/>
+      ${arrowHead(cx,tipY,tipAng,20,'fill-current-bright')}
+      ${motionDots(dotsPath,3,3.6,'fill-current-bright',6)}
+      ${front}
+      ${arrows}
+      ${compasses}
+      <text x="${cx+190}" y="${bottom+30}" class="fill-ink-dim" font-size="13">${dir===1?'전류: 아래 → 위':'전류: 위 → 아래'}</text>
+    `;
+  }
+
+  // ---------- shared coil geometry ----------
+  function coilLoops(cx0, cy, spacing, count, rx, ry){
+    const xs=[];
+    const start = cx0 - spacing*(count-1)/2;
+    for(let i=0;i<count;i++) xs.push(start+i*spacing);
+    return xs;
+  }
+
+  function renderSolenoid(dir){
+    const cy=300, spacing=95, count=5, rx=24, ry=92;
+    const xs = coilLoops(450,cy,spacing,count,rx,ry);
+    const leftX = xs[0]-rx, rightX = xs[xs.length-1]+rx;
+    // dir=1 : front current downward (right edge of each loop) => right end = N
+    const rightIsN = dir===1;
+
+    // the front (nearest-viewer) edge of every turn is always the RIGHT edge
+    // of its ellipse — only the current's direction there depends on dir.
+    // The direction is shown by the MOVING arrows below; static chevrons are
+    // drawn only as a fallback when motion is disabled (prefers-reduced-motion).
+    let loopsBack='', loopsFront='', chevrons='';
+    xs.forEach(x=>{
+      loopsBack += `<ellipse cx="${x}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" class="stroke-current" stroke-width="5" opacity=".4"/>`;
+      loopsFront += `<path d="M ${x} ${cy-ry} A ${rx} ${ry} 0 0 1 ${x} ${cy+ry}" fill="none" class="stroke-current" stroke-width="5" stroke-linecap="round" opacity=".95"/>`;
+      if(REDUCED){
+        chevrons += arrowHead(x+rx*0.86, cy, rightIsN?90:-90, 12, 'fill-current-bright');
+        chevrons += arrowHead(x-rx*0.86, cy, rightIsN?-90:90, 12, 'fill-current-bright');
+      }
+    });
+
+    // animated current flow along the coil's visible (front) wire — one
+    // moving arrowhead per turn, all five starting together (begin=0) so
+    // they travel in sync, slowly enough to be easy and calm to follow.
+    const sweep = rightIsN ? 1 : 0;
+    const startY = rightIsN ? cy-ry : cy+ry, endY = rightIsN ? cy+ry : cy-ry;
+    let flowDots = '';
+    xs.forEach(x=>{
+      const path = `M ${x} ${startY} A ${rx} ${ry} 0 0 ${sweep} ${x} ${endY}`;
+      flowDots += motionArrows(path, 1, 4.5, 'fill-current-bright', 16);
+    });
+
+    // on-axis field line: a single straight mint line through the core (drawn,
+    // not just floating arrowheads), showing the uniform internal field.
+    const flowAng0 = rightIsN ? 0 : 180;
+    const internalArrows = `<line x1="${leftX+6}" y1="${cy}" x2="${rightX-6}" y2="${cy}" class="stroke-field" stroke-width="3" opacity=".95"/>`
+      + arrowHead(450, cy, flowAng0, 17, 'fill-field');
+
+    // closed field-line loops: a coil's external field has the same shape as
+    // a bar magnet's — lines leave the N pole face and enter the S pole face
+    // bunched close together right at the pole (small, near-equal offsets),
+    // then fan out to their widest spacing over the middle of the coil (the
+    // bulge heights), exactly like the single-pole reference photos, where
+    // lines are tight at the pole and spread apart in the open field beyond it.
+    let externalArcs='', externalCompasses='';
+    const flowAng = rightIsN ? 180 : 0; // N→S flow direction along the top/bottom arcs
+    const offs = [6, 9, 13];
+    const bulges = [18, 46, 78];
+    offs.forEach((off,k)=>{
+      const bulge = bulges[k];
+      const peakTopY = cy-ry-bulge, peakBotY = cy+ry+bulge;
+      // the endpoints reach all the way out to the N/S badges (leftX-34 /
+      // rightX+34), so each line visibly leaves the N face and enters the S
+      // face, like the field lines drawn on a bar magnet.
+      const topD = `M ${leftX-26} ${cy-off} C ${leftX-bulge*0.5} ${peakTopY}, ${rightX+bulge*0.5} ${peakTopY}, ${rightX+26} ${cy-off}`;
+      const botD = `M ${leftX-26} ${cy+off} C ${leftX-bulge*0.5} ${peakBotY}, ${rightX+bulge*0.5} ${peakBotY}, ${rightX+26} ${cy+off}`;
+      const opacity = (1-k*0.2).toFixed(2);
+      externalArcs += `<path d="${topD}" fill="none" class="stroke-field" stroke-width="3.2" opacity="${opacity}"/>`;
+      externalArcs += `<path d="${botD}" fill="none" class="stroke-field" stroke-width="3.2" opacity="${opacity}"/>`;
+      // the arrow must sit ON the curve, not at the control-point height: for a
+      // symmetric cubic bezier P0..P3 with P1,P2 sharing y=peak, the point the
+      // curve actually reaches at its horizontal center (t=0.5) is a blend of
+      // the endpoint and control heights, not the control height itself.
+      const onCurveTopY = 0.25*(cy-off) + 0.75*peakTopY;
+      const onCurveBotY = 0.25*(cy+off) + 0.75*peakBotY;
+      externalArcs += arrowHead((leftX+rightX)/2, onCurveTopY, flowAng, 15, 'fill-field');
+      externalArcs += arrowHead((leftX+rightX)/2, onCurveBotY, flowAng, 15, 'fill-field');
+    });
+    // compasses just outside each pole, and along the outermost loop —
+    // placed AT an exact point on that curve, with the needle set to the
+    // curve's own tangent there, so they read as lying flat on the field line.
+    externalCompasses += compass(rightIsN?rightX+76:leftX-76, cy, rightIsN?0:180, 22);
+    externalCompasses += compass(rightIsN?leftX-76:rightX+76, cy, rightIsN?0:180, 22);
+    const outerBulge = bulges[bulges.length-1], outerOff = offs[offs.length-1];
+    const outerPeakTopY = cy-ry-outerBulge, outerPeakBotY = cy+ry+outerBulge;
+    const topP0=[leftX-26,cy-outerOff], topP1=[leftX-outerBulge*0.5,outerPeakTopY],
+          topP2=[rightX+outerBulge*0.5,outerPeakTopY], topP3=[rightX+26,cy-outerOff];
+    const botP0=[leftX-26,cy+outerOff], botP1=[leftX-outerBulge*0.5,outerPeakBotY],
+          botP2=[rightX+outerBulge*0.5,outerPeakBotY], botP3=[rightX+26,cy+outerOff];
+    [0.27, 0.73].forEach(t=>{
+      const top = cubicBezier(topP0,topP1,topP2,topP3,t);
+      const bot = cubicBezier(botP0,botP1,botP2,botP3,t);
+      const topDx = rightIsN ? -top.dx : top.dx, topDy = rightIsN ? -top.dy : top.dy;
+      const botDx = rightIsN ? -bot.dx : bot.dx, botDy = rightIsN ? -bot.dy : bot.dy;
+      externalCompasses += compass(top.x, top.y, Math.atan2(topDy,topDx)/D2R, 21);
+      externalCompasses += compass(bot.x, bot.y, Math.atan2(botDy,botDx)/D2R, 21);
+    });
+
+    const nBadge = poleBadge(rightIsN?rightX+34:leftX-34, cy, 'N');
+    const sBadge = poleBadge(rightIsN?leftX-34:rightX+34, cy, 'S');
+
+    // short fanned rays right at each pole face — in addition to the big
+    // nested loops above, a real pole has field lines spreading out at many
+    // in-between angles close by (as in the reference photos / hand sketch),
+    // not just the two angles the big loops happen to leave at.
+    let poleFans = '';
+    [{x: rightIsN?rightX+34:leftX-34, out: rightIsN?1:-1, isN:true},
+     {x: rightIsN?leftX-34:rightX+34, out: rightIsN?-1:1, isN:false}].forEach(pole=>{
+      [-34, 0, 34].forEach(tilt=>{
+        const baseAngle = pole.out>0 ? 0 : 180;
+        const angle = baseAngle + tilt*(pole.out>0?1:-1);
+        const rad = angle*D2R;
+        const nearLen = 20, farLen = 150, midLen = (nearLen+farLen)/2;
+        const near = [pole.x+Math.cos(rad)*nearLen, cy+Math.sin(rad)*nearLen];
+        const far = [pole.x+Math.cos(rad)*farLen, cy+Math.sin(rad)*farLen];
+        // bowed like the bar-magnet reference, not straight rays: each line
+        // leaves the pole face almost along the axis and then bends AWAY from
+        // it (heading back around toward the other pole), the horizontal one
+        // (tilt 0) staying straight. The pole.out factor mirrors the bend for
+        // the pole on the left, so the two ends curve as mirror images.
+        const bend = -tilt*1.3*pole.out;
+        const mid = [pole.x+Math.cos(rad)*midLen - Math.sin(rad)*bend, cy+Math.sin(rad)*midLen + Math.cos(rad)*bend];
+        poleFans += pole.isN
+          ? `<path d="M ${near[0]} ${near[1]} Q ${mid[0]} ${mid[1]} ${far[0]} ${far[1]}" fill="none" class="stroke-field" stroke-width="2.2" opacity=".8"/>`
+          : `<path d="M ${far[0]} ${far[1]} Q ${mid[0]} ${mid[1]} ${near[0]} ${near[1]}" fill="none" class="stroke-field" stroke-width="2.2" opacity=".8"/>`;
+        // the arrowhead goes at the MIDDLE of the curve (t=0.5 of the quadratic
+        // bezier, where the tangent is simply the chord direction) so it never
+        // ends up hidden behind the pole badge or the compass beside it.
+        const half = [0.25*near[0] + 0.5*mid[0] + 0.25*far[0],
+                      0.25*near[1] + 0.5*mid[1] + 0.25*far[1]];
+        const flow = pole.isN ? [far[0]-near[0], far[1]-near[1]] : [near[0]-far[0], near[1]-far[1]];
+        poleFans += arrowHead(half[0], half[1], Math.atan2(flow[1],flow[0])/D2R, 12, 'fill-field');
+      });
+    });
+
+    // circuit leads. The coil is a helix, so the wire at the left end joins
+    // the BACK of that turn and the wire at the right end joins the FRONT of
+    // its turn: following the wire from one lead to the other then runs up the
+    // back and down the front of every turn, matching the drawn flow arrows.
+    // That wiring is physical and identical for both directions — flipping the
+    // battery only reverses the flow along it — so the left lead is always
+    // drawn behind the coil, the right lead always in front, and only which
+    // terminal is (+) changes with dir.
+    const bottomY=500;
+    const joinDx = rx*0.5, joinY = cy + ry*0.866; // a point at 60° on each end turn
+    const leadBack = `<path d="M ${xs[0]-joinDx} ${joinY} L ${xs[0]-joinDx} ${bottomY} L 424 ${bottomY}" fill="none" class="stroke-ink" stroke-width="2"/>`;
+    const leadFront = `<path d="M 476 ${bottomY} L ${xs[xs.length-1]+joinDx} ${bottomY} L ${xs[xs.length-1]+joinDx} ${joinY}" fill="none" class="stroke-ink" stroke-width="2"/>`;
+    const battery = batterySymbol(450,bottomY,dir,false);
+
+    return `
+      ${externalArcs}
+      ${leadBack}${battery}
+      ${loopsBack}
+      ${flowDots}
+      ${loopsFront}
+      ${leadFront}
+      ${chevrons}
+      ${internalArrows}
+      ${poleFans}
+      ${nBadge}${sBadge}
+      ${externalCompasses}
+      <text x="450" y="30" text-anchor="middle" class="fill-ink-dim" font-size="13">${rightIsN?'전류: 코일 앞면을 따라 위→아래로 흐름':'전류: 코일 앞면을 따라 아래→위로 흐름'}</text>
+    `;
+  }
+
+  // ---------- caption text ----------
+  function captionFor(tab,dir){
+    if(tab==='straight'){
+      const up = dir===1;
+      return {
+        head: up ? '전류가 위로 흐를 때' : '전류가 아래로 흐를 때',
+        body: up
+          ? '오른손 엄지를 전류처럼 위로 향하게 하고 도선을 감아쥐면, 나머지 네 손가락은 도선을 위에서 내려다볼 때 반시계 방향으로 감깁니다. 그 방향이 바로 자기장의 방향이며, 도선 앞쪽(나침반이 있는 자리)에서는 자기장이 오른쪽을 향하므로 나침반의 N극도 오른쪽을 가리킵니다.'
+          : '전류의 방향이 반대(아래)가 되면 오른손 엄지도 아래를 향하게 되고, 네 손가락이 감기는 방향, 즉 자기장의 방향도 정반대인 시계 방향으로 뒤집힙니다. 도선 앞쪽의 자기장은 왼쪽을 향하게 되어 나침반 바늘도 반대로 회전합니다.'
+      };
+    }
+    if(tab==='solenoid'){
+      const rightN = dir===1;
+      return {
+        head: rightN ? '오른쪽 끝이 N극이 되는 전류' : '왼쪽 끝이 N극이 되는 전류',
+        body: rightN
+          ? '오른손 네 손가락을 코일에 흐르는 전류 방향으로 감아쥐면 엄지손가락이 오른쪽을 가리킵니다. 오른쪽 끝이 N극, 왼쪽 끝이 S극이 되며, 솔레노이드 내부에는 왼쪽에서 오른쪽으로 향하는 균일한 자기장이 생겨 막대자석과 같은 자기장 모양을 만듭니다.'
+          : '전류의 방향을 반대로 바꾸면 감아쥔 손가락의 방향도 반대가 되어 엄지가 왼쪽을 가리킵니다. 왼쪽 끝이 N극, 오른쪽 끝이 S극으로 바뀌고, 내부 자기장의 방향도 오른쪽에서 왼쪽으로 뒤집힙니다.'
+      };
+    }
+  }
+
+  // ---------- UI wiring ----------
+  const TAB_CONFIG = {
+    straight:{ options:[{v:1,label:'위로',glyph:'↑'},{v:-1,label:'아래로',glyph:'↓'}], heading:'전류의 방향' },
+    solenoid:{ options:[{v:1,label:'코일 앞면: 위→아래',glyph:miniLoopGlyph(true)},{v:-1,label:'코일 앞면: 아래→위',glyph:miniLoopGlyph(false)}], heading:'전류의 방향' }
+  };
+  const RENDERERS = { straight:renderStraight, solenoid:renderSolenoid };
+
+  const stageCard = document.getElementById('stageCard');
+  const stageContent = document.getElementById('stageContent');
+  const dirGrid = document.getElementById('dirGrid');
+  const dirHeading = document.getElementById('dirHeading');
+  const explainHeadline = document.getElementById('explainHeadline');
+  const explainBody = document.getElementById('explainBody');
+  const ruleThumb = document.getElementById('ruleThumb');
+  const ruleArc = document.getElementById('ruleArc');
+
+  function buildDirButtons(){
+    const cfg = TAB_CONFIG[state.tab];
+    dirHeading.textContent = cfg.heading;
+    dirGrid.innerHTML='';
+    cfg.options.forEach(opt=>{
+      const btn=document.createElement('button');
+      btn.className='dir-btn'+(state.dir===opt.v?' active':'');
+      btn.innerHTML=`<span class="glyph">${opt.glyph}</span>${opt.label}`;
+      btn.addEventListener('click',()=>{
+        if(state.dir===opt.v) return;
+        state.dir=opt.v;
+        render(true);
+      });
+      dirGrid.appendChild(btn);
+    });
+  }
+
+  function render(flip){
+    const renderer = RENDERERS[state.tab];
+    stageContent.innerHTML = renderer(state.dir);
+
+    document.querySelectorAll('.tab-btn').forEach(b=>{
+      b.classList.toggle('active', b.dataset.tab===state.tab);
+    });
+
+    buildDirButtons();
+
+    const cap = captionFor(state.tab,state.dir);
+    explainHeadline.textContent = cap.head;
+    explainBody.textContent = cap.body;
+
+    // rule icon reflects rotation sense for loop-like tabs, straight arrow for straight
+    if(state.tab==='straight'){
+      ruleThumb.setAttribute('transform', state.dir===1 ? '' : 'translate(23,23) rotate(180) translate(-23,-23)');
+      ruleArc.setAttribute('stroke-dasharray','70 24');
+    } else {
+      const cw = state.dir===1;
+      ruleArc.setAttribute('transform', cw ? '' : 'scale(-1,1) translate(-46,0)');
+    }
+
+    if(flip && !REDUCED){
+      stageCard.classList.remove('flip');
+      void stageCard.offsetWidth;
+      stageCard.classList.add('flip');
+    }
+  }
+
+  document.getElementById('tabs').addEventListener('click', e=>{
+    const btn = e.target.closest('.tab-btn');
+    if(!btn) return;
+    if(state.tab===btn.dataset.tab) return;
+    state.tab = btn.dataset.tab;
+    state.dir = 1;
+    render(false);
+  });
+
+  render(false);
+})();
+</script>
