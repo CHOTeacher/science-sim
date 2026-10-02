@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>뜨거워진 남해 바다, 물폭탄이 된 하늘</title>
+<style>
+  :root{
+    --bg:#eef6fc;
+    --panel:#ffffff;
+    --line:#cfe0ee;
+    --ink:#14304a;
+    --ink-dim:#4a657d;
+    --sea:#1670bf;
+    --sea-soft:#e1f0fb;
+    --warm:#d9480f;
+    --warm-soft:#fff1e6;
+  }
+  *{box-sizing:border-box;}
+  html{font-size:clamp(16px,1.25vw,22px);}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Pretendard','Noto Sans KR','Malgun Gothic','Apple SD Gothic Neo',sans-serif;
+    line-height:1.55;
+  }
+  .wrap{max-width:1500px;margin:0 auto;padding:1.2rem 1rem 2rem;}
+
+  header{margin-bottom:.9rem;}
+  .eyebrow{margin:0 0 .2rem;font-size:.85rem;font-weight:700;color:var(--sea);letter-spacing:.02em;}
+  h1{margin:0 0 .3rem;font-size:clamp(1.5rem,2.6vw,2.3rem);line-height:1.25;text-wrap:balance;}
+  header p{margin:0;color:var(--ink-dim);max-width:70ch;}
+
+  .layout{display:grid;grid-template-columns:minmax(0,1fr) 20rem;gap:.9rem;align-items:start;}
+  @media (max-width:900px){.layout{grid-template-columns:1fr;}}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;}
+  .stage{padding:.4rem;overflow:hidden;}
+  .stage canvas{display:block;width:100%;aspect-ratio:1000/600;border-radius:11px;touch-action:pan-y;}
+
+  .side{padding:1rem;display:flex;flex-direction:column;gap:1rem;}
+  .side h2{margin:0;font-size:1rem;}
+
+  .temp-row{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem;}
+  .temp-val{font-size:2.1rem;font-weight:800;color:var(--warm);font-variant-numeric:tabular-nums;line-height:1;}
+  .temp-val small{font-size:1.1rem;font-weight:700;}
+
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;
+    width:100%;height:2.4rem;margin:.3rem 0 0;background:transparent;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:.8rem;border-radius:99px;background:linear-gradient(90deg,#3b8fd6,#f2b24b 55%,#d9480f);}
+  input[type=range]::-moz-range-track{height:.8rem;border-radius:99px;background:linear-gradient(90deg,#3b8fd6,#f2b24b 55%,#d9480f);}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:2rem;height:2rem;border-radius:50%;margin-top:-.6rem;
+    background:#fff;border:.25rem solid var(--ink);box-shadow:0 2px 6px rgba(20,48,74,.3);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:1.5rem;height:1.5rem;border-radius:50%;
+    background:#fff;border:.25rem solid var(--ink);box-shadow:0 2px 6px rgba(20,48,74,.3);
+  }
+  input[type=range]:focus-visible{outline:3px solid var(--sea);outline-offset:4px;border-radius:8px;}
+  .scale{display:flex;justify-content:space-between;font-size:.8rem;color:var(--ink-dim);}
+
+  button{font:inherit;color:inherit;cursor:pointer;}
+  button:focus-visible{outline:3px solid var(--sea);outline-offset:2px;}
+
+  .presets{display:grid;gap:.45rem;}
+  .preset{
+    display:flex;justify-content:space-between;align-items:center;gap:.5rem;
+    text-align:left;padding:.6rem .75rem;min-height:2.9rem;
+    background:var(--sea-soft);border:1px solid var(--line);border-radius:10px;font-size:.9rem;
+  }
+  .preset b{font-size:1rem;white-space:nowrap;}
+  .preset:hover{border-color:var(--sea);}
+  .preset[aria-pressed=true]{background:var(--sea);border-color:var(--sea);color:#fff;}
+
+  .readout{display:grid;gap:.8rem;}
+  .meter .lab{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;font-size:.9rem;}
+  .meter .lab b{font-size:1.05rem;font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .bar{height:.75rem;border-radius:99px;background:#e3edf5;overflow:hidden;margin-top:.25rem;}
+  .bar i{display:block;height:100%;width:0;border-radius:99px;background:var(--sea);}
+  .bar.warm i{background:var(--warm);}
+  .meter .sub{font-size:.8rem;color:var(--ink-dim);margin-top:.2rem;}
+
+  .ctrl{display:flex;gap:.5rem;}
+  .ctrl button{
+    flex:1;min-height:2.9rem;padding:.5rem;border-radius:10px;font-weight:700;
+    background:#fff;border:2px solid var(--ink);
+  }
+  .ctrl button:hover{background:var(--sea-soft);}
+
+  .legend{display:flex;flex-wrap:wrap;gap:.4rem 1rem;font-size:.85rem;color:var(--ink-dim);margin:0;padding:0;list-style:none;}
+  .legend li{display:flex;align-items:center;gap:.4rem;}
+  .dot{display:inline-block;width:.85rem;height:.85rem;border-radius:50%;}
+  .dot.vapor{background:#fff;border:2px solid #1a5fa6;}
+  .dot.drop{background:#1552b8;border:2px solid #1552b8;width:1rem;height:1rem;}
+
+  .steps{margin-top:.9rem;padding:1rem;}
+  .tabs{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:.8rem;}
+  .tab{
+    min-height:2.9rem;padding:.5rem 1rem;border-radius:10px;font-weight:700;
+    background:#fff;border:2px solid var(--line);color:var(--ink-dim);
+  }
+  .tab:hover{border-color:var(--warm);color:var(--ink);}
+  .tab[aria-pressed=true]{background:var(--warm);border-color:var(--warm);color:#fff;}
+  .step-body{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;}
+  @media (max-width:900px){.step-body{grid-template-columns:1fr;}}
+  .box{border-radius:12px;padding:.85rem 1rem;}
+  .box h3{margin:0 0 .35rem;font-size:.85rem;letter-spacing:.02em;}
+  .box p{margin:0;font-size:1.05rem;}
+  .box.sheet{background:var(--sea-soft);}
+  .box.sheet h3{color:var(--sea);}
+  .box.look{background:var(--warm-soft);}
+  .box.look h3{color:var(--warm);}
+  .box.look ul{margin:0;padding-left:1.2rem;font-size:1.05rem;}
+  .blank{
+    display:inline-block;min-width:5.5em;height:1.5em;vertical-align:middle;margin:0 .15em;
+    background:#fff;border:2px dashed var(--sea);border-radius:6px;
+  }
+  .blank.s{min-width:3.5em;}
+  .blank.l{min-width:8em;}
+
+  footer{margin-top:.9rem;font-size:.8rem;color:var(--ink-dim);}
+  footer p{margin:.15rem 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">기후변화 · 학생 활동지(3) [자료 5] 2번</p>
+    <h1>뜨거워진 남해 바다, 물폭탄이 된 하늘</h1>
+    <p>남해의 해수온을 바꾸어 보면서 바다, 산, 하늘에서 일어나는 변화를 관찰하고 활동지의 빈칸을 채워 봅시다.</p>
+  </header>
+
+  <div class="layout">
+    <div class="card stage">
+      <canvas id="cv" role="img" aria-label="남해 바다와 경남의 산지 단면 그림. 바다에서 올라온 수증기가 남풍을 타고 산으로 이동해 구름과 비가 되는 과정을 보여 준다."></canvas>
+    </div>
+
+    <aside class="card side">
+      <div>
+        <div class="temp-row">
+          <h2><label for="temp">남해 해수온</label></h2>
+          <div class="temp-val"><span id="tempVal">22.1</span><small>℃</small></div>
+        </div>
+        <input type="range" id="temp" min="20" max="30" step="0.1" value="22.1">
+        <div class="scale"><span>20℃</span><span>25℃</span><span>30℃</span></div>
+      </div>
+
+      <div class="presets">
+        <button class="preset" data-t="22.1" aria-pressed="true"><span>1991~2000년 여름 평균</span><b>22.1℃</b></button>
+        <button class="preset" data-t="24.1" aria-pressed="false"><span>2021~2025년 여름 평균</span><b>24.1℃</b></button>
+      </div>
+
+      <div class="readout">
+        <div class="meter">
+          <div class="lab"><span>공기가 머금을 수 있는 최대 수증기량</span><b><span id="wVal">0</span> g/kg</b></div>
+          <div class="bar"><i id="wBar"></i></div>
+          <div class="sub">20℃일 때의 <b id="wRatio">1.00</b>배</div>
+        </div>
+        <div class="meter">
+          <div class="lab"><span>구름의 높이</span><b id="cVal">-</b></div>
+          <div class="bar"><i id="cBar"></i></div>
+        </div>
+        <div class="meter">
+          <div class="lab"><span>비의 세기</span><b id="rVal">-</b></div>
+          <div class="bar warm"><i id="rBar"></i></div>
+        </div>
+      </div>
+
+      <div class="ctrl">
+        <button id="play" aria-pressed="false">일시정지</button>
+        <button id="reset">처음으로</button>
+      </div>
+
+      <ul class="legend">
+        <li><span class="dot vapor"></span>수증기(기체)</li>
+        <li><span class="dot drop"></span>물방울(액체)</li>
+      </ul>
+    </aside>
+  </div>
+
+  <section class="card steps" aria-label="단계별 관찰">
+    <div class="tabs" id="tabs">
+      <button class="tab" data-s="0" aria-pressed="true">전체 보기</button>
+      <button class="tab" data-s="1" aria-pressed="false">① 바다</button>
+      <button class="tab" data-s="2" aria-pressed="false">② 산</button>
+      <button class="tab" data-s="3" aria-pressed="false">③ 높은 상공</button>
+      <button class="tab" data-s="4" aria-pressed="false">④ 지상</button>
+    </div>
+    <div class="step-body">
+      <div class="box sheet"><h3>활동지 문장</h3><p id="sheet"></p></div>
+      <div class="box look"><h3>이렇게 관찰해요</h3><ul id="look"></ul></div>
+    </div>
+  </section>
+
+  <footer>
+    <p>※ 이 화면은 원리를 보여 주는 모형입니다. 구름의 높이와 비의 세기는 실제 예보 값이 아닙니다. 최대 수증기량은 바다 바로 위 공기가 해수온만큼 데워졌다고 가정한 값입니다.</p>
+    <p>해수온 자료: 한국해양자료센터(KODC) 정선해양조사자료, 남해안 표층 6~8월 평균 (교재 [자료 6] 자료 A)</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var W=1000, H=600, SEA=470, CX=800, BASE=205;
+  var TERR=[[540,470],[600,455],[680,400],[760,335],[820,290],[880,330],[940,355],[1000,345]];
+
+  var STEPS=[
+    {sheet:'활동지의 흐름도는 <b>아래(①)에서 위(④)로</b> 읽습니다. 단계 버튼을 누르면 그 단계가 일어나는 곳이 표시됩니다.',
+     look:['해수온을 22.1℃에 두고 바다, 산, 하늘을 살펴봅니다.','해수온을 24.1℃, 30℃로 올리면 무엇이 달라지는지 비교합니다.']},
+    {region:[0,290,560,310],
+     sheet:'남해안 해수온이 올라가면 바닷물의 <span class="blank s"></span>량이 급증하여 대기 중에 <span class="blank"></span>한 공기가 대량으로 형성',
+     look:['해수온을 올리면 바다 표면에서 떠오르는 입자의 수가 어떻게 달라지나요?','바다 바로 위 공기의 온도와 수증기의 양은 어떻게 될까요?']},
+    {region:[530,225,330,255],
+     sheet:'남풍을 타고 유입된 다량의 수증기가 경남의 해안 산지나 내륙 산맥에 부딪히면, 경사면을 따라 공기가 강제로 <span class="blank s"></span>',
+     look:['바다 위를 지나온 입자가 산을 만나면 어느 방향으로 움직이나요?','화살표의 방향을 따라가 봅니다.']},
+    {region:[630,8,340,250],
+     sheet:'공기가 급격히 높은 상공으로 치솟으며 찬 공기를 만나 <span class="blank s"></span>하여 수직으로 발달하는 거대한 <span class="blank"></span> 형성',
+     look:['점선(찬 공기) 위로 올라간 입자는 모양이 어떻게 바뀌나요?','해수온을 올리면 구름은 어느 방향으로 자라나요?']},
+    {region:[630,195,340,300],
+     sheet:'경남 지역에 짧은 시간 동안 막대한 양의 비를 쏟아붓는 <span class="blank l"></span> 발생',
+     look:['비는 넓은 지역에 고르게 내리나요, 좁은 지역에 집중되나요?','해수온에 따라 비의 세기는 어떻게 달라지나요?']}
+  ];
+
+  var cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+  var slider=document.getElementById('temp');
+  var T=22.1, k=0, ks=0, step=0, playing=true, time=0;
+  var vapor=[], rain=[], spawnAcc=0, rainAcc=0;
+
+  /* 포화 혼합비(g/kg): 20℃ 14.7, 30℃ 27.2 (교재 [자료 3] 수치와 일치) */
+  function satW(t){var es=6.112*Math.exp(17.67*t/(t+243.5));return 622*es/(1013.25-es);}
+  var W20=satW(20), W30=satW(30);
+
+  function terrainY(x){
+    if(x<=TERR[0][0]) return SEA;
+    for(var i=1;i<TERR.length;i++){
+      if(x<=TERR[i][0]){
+        var a=TERR[i-1], b=TERR[i];
+        return a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]);
+      }
+    }
+    return TERR[TERR.length-1][1];
+  }
+  function lerp(a,b,t){return a+(b-a)*t;}
+  function mix(c1,c2,t){return 'rgb('+Math.round(lerp(c1[0],c2[0],t))+','+Math.round(lerp(c1[1],c2[1],t))+','+Math.round(lerp(c1[2],c2[2],t))+')';}
+  function cloudH(){return 45+125*ks;}
+  function cloudW(){return 150+110*ks;}
+
+  /* 구름 덩어리 위치(고정) */
+  var PUFFS=[];
+  (function(){
+    var s=7;
+    function rnd(){s=(s*16807)%2147483647;return s/2147483647;}
+    for(var i=0;i<70;i++) PUFFS.push({u:rnd()*2-1, v:rnd(), r:rnd()});
+    PUFFS.sort(function(a,b){return b.v-a.v;});
+  })();
+
+  function setTemp(t){
+    T=Math.round(t*10)/10;
+    k=(satW(T)-W20)/(W30-W20);
+    slider.value=T;
+    var w=satW(T);
+    document.getElementById('tempVal').textContent=T.toFixed(1);
+    document.getElementById('wVal').textContent=w.toFixed(1);
+    document.getElementById('wRatio').textContent=(w/W20).toFixed(2);
+    document.getElementById('wBar').style.width=(w/W30*100)+'%';
+    var ps=document.querySelectorAll('.preset');
+    for(var i=0;i<ps.length;i++) ps[i].setAttribute('aria-pressed', String(Math.abs(parseFloat(ps[i].dataset.t)-T)<0.05));
+  }
+  function levelName(v,names){return v<0.2?names[0]:v<0.45?names[1]:v<0.72?names[2]:names[3];}
+  function updateMeters(){
+    var r=Math.pow(ks,1.4);
+    document.getElementById('cVal').textContent=levelName(ks,['낮음','보통','높음','매우 높음']);
+    document.getElementById('cBar').style.width=(12+88*ks)+'%';
+    document.getElementById('rVal').textContent=levelName(r,['약함','보통','강함','매우 강함']);
+    document.getElementById('rBar').style.width=(8+92*r)+'%';
+  }
+
+  function setStep(n){
+    step=n;
+    document.getElementById('sheet').innerHTML=STEPS[n].sheet;
+    document.getElementById('look').innerHTML=STEPS[n].look.map(function(t){return '<li>'+t+'</li>';}).join('');
+    var tabs=document.querySelectorAll('.tab');
+    for(var i=0;i<tabs.length;i++) tabs[i].setAttribute('aria-pressed', String(Number(tabs[i].dataset.s)===n));
+  }
+
+  function update(dt){
+    time+=dt;
+    ks+=(k-ks)*Math.min(1,dt*0.9);
+
+    spawnAcc+=dt*(7+70*k);
+    while(spawnAcc>=1){
+      spawnAcc-=1;
+      if(vapor.length<1100) vapor.push({
+        x:Math.random()*535, y:SEA-2, vx:42+Math.random()*26,
+        alt:SEA-(22+Math.random()*115), off:14+Math.random()*58,
+        cy:BASE+Math.random()*22, ph:Math.random()*6.28, drop:false, life:0
+      });
+    }
+    var top=BASE-cloudH();
+    for(var i=vapor.length-1;i>=0;i--){
+      var p=vapor[i];
+      if(!p.drop){
+        p.x+=p.vx*dt;
+        var ty=Math.min(p.alt, terrainY(p.x)-p.off);
+        if(p.x>770) ty=Math.min(ty,p.cy-8);
+        p.y+=(ty-p.y)*Math.min(1,dt*2.2)+Math.sin(time*2+p.ph)*0.15;
+        if((p.x>690&&p.y<p.cy)||p.x>850){p.drop=true;p.life=0;}
+      }else{
+        p.life+=dt;
+        p.x+=(CX+Math.sin(p.ph)*cloudW()*0.3-p.x)*dt*0.7;
+        p.y-=(24+85*ks)*dt;
+        if(p.y<top+12||p.life>4) vapor.splice(i,1);
+      }
+    }
+
+    rainAcc+=dt*(5+520*ks*ks);
+    var half=cloudW()/2-18;
+    while(rainAcc>=1){
+      rainAcc-=1;
+      if(rain.length<900) rain.push({x:CX+(Math.random()*2-1)*half, y:BASE+6+Math.random()*10});
+    }
+    for(var j=rain.length-1;j>=0;j--){
+      var d=rain[j];
+      d.y+=(300+200*ks)*dt; d.x+=18*dt;
+      if(d.y>terrainY(d.x)) rain.splice(j,1);
+    }
+    updateMeters();
+  }
+
+  function arrow(x1,y1,x2,y2,color,lw){
+    var a=Math.atan2(y2-y1,x2-x1), h=13;
+    ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=lw;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2-Math.cos(a)*h*0.6,y2-Math.sin(a)*h*0.6);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(x2,y2);
+    ctx.lineTo(x2-Math.cos(a-0.45)*h,y2-Math.sin(a-0.45)*h);
+    ctx.lineTo(x2-Math.cos(a+0.45)*h,y2-Math.sin(a+0.45)*h);ctx.closePath();ctx.fill();
+  }
+  function label(text,x,y,size,color,align,halo){
+    ctx.font='700 '+size+'px "Pretendard","Noto Sans KR","Malgun Gothic",sans-serif';
+    ctx.textAlign=align||'left';ctx.textBaseline='middle';
+    if(halo){ctx.lineWidth=5;ctx.lineJoin='round';ctx.strokeStyle=halo;ctx.strokeText(text,x,y);}
+    ctx.fillStyle=color;ctx.fillText(text,x,y);
+  }
+
+  function draw(){
+    var i;
+    /* 하늘 */
+    var g=ctx.createLinearGradient(0,0,0,SEA);
+    g.addColorStop(0,mix([96,176,240],[98,112,128],ks*0.85));
+    g.addColorStop(1,mix([222,241,255],[190,200,210],ks*0.85));
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+
+    /* 해 */
+    ctx.globalAlpha=1-ks*0.55;
+    ctx.fillStyle='#ffd43b';ctx.beginPath();ctx.arc(95,85,38,0,6.3);ctx.fill();
+    ctx.globalAlpha=1;
+
+    /* 찬 공기 경계 */
+    ctx.setLineDash([10,9]);ctx.strokeStyle='rgba(20,48,74,.45)';ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(350,BASE+12);ctx.lineTo(W,BASE+12);ctx.stroke();ctx.setLineDash([]);
+    label('높은 상공 (찬 공기)',360,BASE-8,19,'#14304a','left','rgba(255,255,255,.75)');
+
+    /* 구름 */
+    var ch=cloudH(), cw=cloudW();
+    for(i=0;i<PUFFS.length;i++){
+      var q=PUFFS[i];
+      var hw=cw/2*(0.72+0.28*Math.sin(q.v*Math.PI));
+      if(q.v>0.82) hw*=1+0.45*ks;
+      var px=CX+q.u*hw, py=BASE-q.v*ch, pr=(20+16*q.r)*(0.8+0.35*ks);
+      ctx.fillStyle=mix([255,255,255],[86,98,112],ks*(1-q.v*0.75));
+      ctx.beginPath();ctx.arc(px,py,pr,0,6.3);ctx.fill();
+    }
+
+    /* 비 */
+    ctx.strokeStyle='rgba(21,82,184,.85)';ctx.lineWidth=2+ks*1.2;ctx.lineCap='round';
+    var len=11+16*ks;
+    ctx.beginPath();
+    for(i=0;i<rain.length;i++){ctx.moveTo(rain[i].x,rain[i].y);ctx.lineTo(rain[i].x-len*0.06,rain[i].y-len);}
+    ctx.stroke();
+
+    /* 바다 */
+    var sg=ctx.createLinearGradient(0,SEA,0,H);
+    sg.addColorStop(0,mix([58,150,214],[232,120,70],Math.min(1,k*1.1)));
+    sg.addColorStop(0.5,mix([30,112,186],[60,116,170],k));
+    sg.addColorStop(1,'#17528f');
+    ctx.fillStyle=sg;
+    ctx.beginPath();ctx.moveTo(0,SEA);
+    for(var x=0;x<=570;x+=15) ctx.lineTo(x,SEA+Math.sin(x*0.045+time*1.6)*2.5);
+    ctx.lineTo(570,H);ctx.lineTo(0,H);ctx.closePath();ctx.fill();
+
+    /* 육지와 산 */
+    ctx.fillStyle='#4f9a5d';
+    ctx.beginPath();ctx.moveTo(TERR[0][0]-18,H);ctx.lineTo(TERR[0][0]-18,SEA+14);
+    for(i=0;i<TERR.length;i++) ctx.lineTo(TERR[i][0],TERR[i][1]);
+    ctx.lineTo(W,H);ctx.closePath();ctx.fill();
+    ctx.strokeStyle='#2f6e3f';ctx.lineWidth=4;ctx.lineJoin='round';
+    ctx.beginPath();ctx.moveTo(TERR[0][0],TERR[0][1]);
+    for(i=1;i<TERR.length;i++) ctx.lineTo(TERR[i][0],TERR[i][1]);ctx.stroke();
+
+    label('남해 바다',40,535,26,'#ffffff','left');
+    label('해수온 '+T.toFixed(1)+'℃',40,572,21,'#ffffff','left');
+    label('경남의 산지',800,450,24,'#ffffff','center');
+
+    /* 바람 화살표 */
+    var wc='rgba(20,48,74,.6)';
+    arrow(150,330,250,330,wc,4);arrow(330,385,430,385,wc,4);
+    label('남풍',150,304,21,'#14304a','left','rgba(255,255,255,.75)');
+    var sl=0.75+0.5*ks;
+    arrow(585,425,585+60*sl,425-45*sl,wc,4);
+    arrow(680,350,680+60*sl,350-45*sl,wc,4);
+
+    /* 수증기와 물방울 */
+    for(i=0;i<vapor.length;i++){
+      var p=vapor[i];
+      ctx.beginPath();
+      if(p.drop){
+        ctx.arc(p.x,p.y,4.6,0,6.3);
+        ctx.fillStyle='#1552b8';ctx.fill();
+        ctx.strokeStyle='#ffffff';ctx.lineWidth=1.3;ctx.stroke();
+      }else{
+        ctx.arc(p.x,p.y,3.6,0,6.3);
+        ctx.fillStyle='rgba(255,255,255,.9)';ctx.fill();
+        ctx.strokeStyle='#1a5fa6';ctx.lineWidth=1.6;ctx.stroke();
+      }
+    }
+
+    /* 단계 강조 */
+    var rg=STEPS[step].region;
+    if(rg){
+      ctx.fillStyle='rgba(238,246,252,.7)';
+      ctx.beginPath();ctx.rect(0,0,W,H);ctx.rect(rg[0],rg[1],rg[2],rg[3]);ctx.fill('evenodd');
+      ctx.setLineDash([14,8]);ctx.strokeStyle='#d9480f';ctx.lineWidth=5;
+      ctx.strokeRect(rg[0]+3,rg[1]+3,rg[2]-6,rg[3]-6);ctx.setLineDash([]);
+      var bx=rg[0]+30, by=rg[1]+30;
+      ctx.fillStyle='#d9480f';ctx.beginPath();ctx.arc(bx,by,21,0,6.3);ctx.fill();
+      label(String(step),bx,by+1,25,'#ffffff','center');
+    }
+  }
+
+  function resize(){
+    var dpr=Math.min(window.devicePixelRatio||1,2);
+    var w=cv.clientWidth||W;
+    cv.width=Math.round(w*dpr);cv.height=Math.round(w*H/W*dpr);
+    ctx.setTransform(cv.width/W,0,0,cv.height/H,0,0);
+    draw();
+  }
+
+  var last=0;
+  function frame(ts){
+    var dt=Math.min(0.05,(ts-last)/1000||0);last=ts;
+    if(playing) update(dt);
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  slider.addEventListener('input',function(){setTemp(parseFloat(slider.value));});
+  var ps=document.querySelectorAll('.preset');
+  for(var i=0;i<ps.length;i++) ps[i].addEventListener('click',function(){setTemp(parseFloat(this.dataset.t));});
+  document.getElementById('tabs').addEventListener('click',function(e){
+    var b=e.target.closest('.tab'); if(b) setStep(Number(b.dataset.s));
+  });
+  document.getElementById('play').addEventListener('click',function(){
+    playing=!playing;
+    this.textContent=playing?'일시정지':'다시 재생';
+    this.setAttribute('aria-pressed',String(!playing));
+  });
+  document.getElementById('reset').addEventListener('click',function(){
+    vapor=[];rain=[];spawnAcc=0;rainAcc=0;setTemp(22.1);ks=k;setStep(0);updateMeters();
+  });
+  window.addEventListener('resize',resize);
+
+  setTemp(22.1);ks=k;setStep(0);updateMeters();resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
