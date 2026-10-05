@@ -37,7 +37,7 @@
 
   .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;}
   .stage{padding:.4rem;overflow:hidden;}
-  .stage canvas{display:block;width:100%;aspect-ratio:1000/600;border-radius:11px;touch-action:pan-y;}
+  .stage canvas{display:block;width:100%;aspect-ratio:1000/720;border-radius:11px;touch-action:pan-y;}
 
   .side{padding:1rem;display:flex;flex-direction:column;gap:1rem;}
   .side h2{margin:0;font-size:1rem;}
@@ -66,16 +66,6 @@
 
   button{font:inherit;color:inherit;cursor:pointer;}
   button:focus-visible{outline:3px solid var(--sea);outline-offset:2px;}
-
-  .presets{display:grid;gap:.45rem;}
-  .preset{
-    display:flex;justify-content:space-between;align-items:center;gap:.5rem;
-    text-align:left;padding:.6rem .75rem;min-height:2.9rem;
-    background:var(--sea-soft);border:1px solid var(--line);border-radius:10px;font-size:.9rem;
-  }
-  .preset b{font-size:1rem;white-space:nowrap;}
-  .preset:hover{border-color:var(--sea);}
-  .preset[aria-pressed=true]{background:var(--sea);border-color:var(--sea);color:#fff;}
 
   .readout{display:grid;gap:.8rem;}
   .meter .lab{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;font-size:.9rem;}
@@ -150,11 +140,6 @@
         <div class="scale"><span>20℃</span><span>25℃</span><span>30℃</span></div>
       </div>
 
-      <div class="presets">
-        <button class="preset" data-t="22.1" aria-pressed="true"><span>1991~2000년 여름 평균</span><b>22.1℃</b></button>
-        <button class="preset" data-t="24.1" aria-pressed="false"><span>2021~2025년 여름 평균</span><b>24.1℃</b></button>
-      </div>
-
       <div class="readout">
         <div class="meter">
           <div class="lab"><span>공기가 머금을 수 있는 최대 수증기량</span><b><span id="wVal">0</span> g/kg</b></div>
@@ -162,7 +147,7 @@
           <div class="sub">20℃일 때의 <b id="wRatio">1.00</b>배</div>
         </div>
         <div class="meter">
-          <div class="lab"><span>구름의 높이</span><b id="cVal">-</b></div>
+          <div class="lab"><span>구름의 두께</span><b id="cVal">-</b></div>
           <div class="bar"><i id="cBar"></i></div>
         </div>
         <div class="meter">
@@ -198,7 +183,7 @@
   </section>
 
   <footer>
-    <p>※ 이 화면은 원리를 보여 주는 모형입니다. 구름의 높이와 비의 세기는 실제 예보 값이 아닙니다. 최대 수증기량은 바다 바로 위 공기가 해수온만큼 데워졌다고 가정한 값입니다.</p>
+    <p>※ 이 화면은 원리를 보여 주는 모형입니다. 구름의 두께와 비의 세기는 실제 예보 값이 아닙니다. 최대 수증기량은 바다 바로 위 공기가 해수온만큼 데워졌다고 가정한 값입니다.</p>
     <p>해수온 자료: 한국해양자료센터(KODC) 정선해양조사자료, 남해안 표층 6~8월 평균 (교재 [자료 6] 자료 A)</p>
   </footer>
 </div>
@@ -206,22 +191,22 @@
 <script>
 (function(){
   'use strict';
-  var W=1000, H=600, SEA=470, CX=800, BASE=205;
-  var TERR=[[540,470],[600,455],[680,400],[760,335],[820,290],[880,330],[940,355],[1000,345]];
+  var W=1000, H=720, SEA=640, CX=800, BASE=400;
+  var TERR=[[540,640],[600,622],[680,560],[760,490],[820,440],[880,482],[940,512],[1000,502]];
 
   var STEPS=[
     {sheet:'활동지의 흐름도는 <b>아래(①)에서 위(④)로</b> 읽습니다. 단계 버튼을 누르면 그 단계가 일어나는 곳이 표시됩니다.',
      look:['해수온을 22.1℃에 두고 바다, 산, 하늘을 살펴봅니다.','해수온을 24.1℃, 30℃로 올리면 무엇이 달라지는지 비교합니다.']},
-    {region:[0,290,560,310],
+    {region:[0,460,560,260],
      sheet:'남해안 해수온이 올라가면 바닷물의 <span class="blank s"></span>량이 급증하여 대기 중에 <span class="blank"></span>한 공기가 대량으로 형성',
      look:['해수온을 올리면 바다 표면에서 떠오르는 입자의 수가 어떻게 달라지나요?','바다 바로 위 공기의 온도와 수증기의 양은 어떻게 될까요?']},
-    {region:[530,225,330,255],
+    {region:[530,385,330,260],
      sheet:'남풍을 타고 유입된 다량의 수증기가 경남의 해안 산지나 내륙 산맥에 부딪히면, 경사면을 따라 공기가 강제로 <span class="blank s"></span>',
      look:['바다 위를 지나온 입자가 산을 만나면 어느 방향으로 움직이나요?','화살표의 방향을 따라가 봅니다.']},
-    {region:[630,8,340,250],
+    {region:[560,8,440,440],
      sheet:'공기가 급격히 높은 상공으로 치솟으며 찬 공기를 만나 <span class="blank s"></span>하여 수직으로 발달하는 거대한 <span class="blank"></span> 형성',
-     look:['점선(찬 공기) 위로 올라간 입자는 모양이 어떻게 바뀌나요?','해수온을 올리면 구름은 어느 방향으로 자라나요?']},
-    {region:[630,195,340,300],
+     look:['점선(찬 공기) 위로 올라간 입자는 모양이 어떻게 바뀌나요?','해수온을 올리면 구름의 두께와 색은 어떻게 달라지나요?']},
+    {region:[630,392,340,290],
      sheet:'경남 지역에 짧은 시간 동안 막대한 양의 비를 쏟아붓는 <span class="blank l"></span> 발생',
      look:['비는 넓은 지역에 고르게 내리나요, 좁은 지역에 집중되나요?','해수온에 따라 비의 세기는 어떻게 달라지나요?']}
   ];
@@ -247,15 +232,15 @@
   }
   function lerp(a,b,t){return a+(b-a)*t;}
   function mix(c1,c2,t){return 'rgb('+Math.round(lerp(c1[0],c2[0],t))+','+Math.round(lerp(c1[1],c2[1],t))+','+Math.round(lerp(c1[2],c2[2],t))+')';}
-  function cloudH(){return 45+125*ks;}
-  function cloudW(){return 150+110*ks;}
+  function cloudH(){return 195+170*ks;}
+  function cloudW(){return 190+110*ks;}
 
   /* 구름 덩어리 위치(고정) */
   var PUFFS=[];
   (function(){
     var s=7;
     function rnd(){s=(s*16807)%2147483647;return s/2147483647;}
-    for(var i=0;i<70;i++) PUFFS.push({u:rnd()*2-1, v:rnd(), r:rnd()});
+    for(var i=0;i<200;i++) PUFFS.push({u:rnd()*2-1, v:rnd(), r:rnd()});
     PUFFS.sort(function(a,b){return b.v-a.v;});
   })();
 
@@ -268,14 +253,12 @@
     document.getElementById('wVal').textContent=w.toFixed(1);
     document.getElementById('wRatio').textContent=(w/W20).toFixed(2);
     document.getElementById('wBar').style.width=(w/W30*100)+'%';
-    var ps=document.querySelectorAll('.preset');
-    for(var i=0;i<ps.length;i++) ps[i].setAttribute('aria-pressed', String(Math.abs(parseFloat(ps[i].dataset.t)-T)<0.05));
   }
   function levelName(v,names){return v<0.2?names[0]:v<0.45?names[1]:v<0.72?names[2]:names[3];}
   function updateMeters(){
     var r=Math.pow(ks,1.4);
-    document.getElementById('cVal').textContent=levelName(ks,['낮음','보통','높음','매우 높음']);
-    document.getElementById('cBar').style.width=(12+88*ks)+'%';
+    document.getElementById('cVal').textContent=levelName(ks,['두꺼움','더 두꺼움','매우 두꺼움','가장 두꺼움']);
+    document.getElementById('cBar').style.width=(48+52*ks)+'%';
     document.getElementById('rVal').textContent=levelName(r,['약함','보통','강함','매우 강함']);
     document.getElementById('rBar').style.width=(8+92*r)+'%';
   }
@@ -313,12 +296,12 @@
       }else{
         p.life+=dt;
         p.x+=(CX+Math.sin(p.ph)*cloudW()*0.3-p.x)*dt*0.7;
-        p.y-=(24+85*ks)*dt;
-        if(p.y<top+12||p.life>4) vapor.splice(i,1);
+        p.y-=(45+90*ks)*dt;
+        if(p.y<top+12||p.life>5.5) vapor.splice(i,1);
       }
     }
 
-    rainAcc+=dt*(5+520*ks*ks);
+    rainAcc+=dt*(16+520*ks*ks);
     var half=cloudW()/2-18;
     while(rainAcc>=1){
       rainAcc-=1;
@@ -351,12 +334,12 @@
     var i;
     /* 하늘 */
     var g=ctx.createLinearGradient(0,0,0,SEA);
-    g.addColorStop(0,mix([96,176,240],[98,112,128],ks*0.85));
-    g.addColorStop(1,mix([222,241,255],[190,200,210],ks*0.85));
+    g.addColorStop(0,mix([96,176,240],[128,170,208],ks*0.7));
+    g.addColorStop(1,mix([222,241,255],[216,226,234],ks*0.7));
     ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
 
     /* 해 */
-    ctx.globalAlpha=1-ks*0.55;
+    ctx.globalAlpha=1-ks*0.3;
     ctx.fillStyle='#ffd43b';ctx.beginPath();ctx.arc(95,85,38,0,6.3);ctx.fill();
     ctx.globalAlpha=1;
 
@@ -365,16 +348,25 @@
     ctx.beginPath();ctx.moveTo(350,BASE+12);ctx.lineTo(W,BASE+12);ctx.stroke();ctx.setLineDash([]);
     label('높은 상공 (찬 공기)',360,BASE-8,19,'#14304a','left','rgba(255,255,255,.75)');
 
-    /* 구름 */
-    var ch=cloudH(), cw=cloudW();
+    /* 구름: 밑면은 평평하고, 두꺼울수록 밑면이 어둡다. 꼭대기는 햇빛을 받아 희다. */
+    var ch=cloudH(), cw=cloudW(), anvil=Math.max(0,ks-0.45)/0.55;
+    ctx.save();ctx.beginPath();ctx.rect(0,0,W,BASE+15);ctx.clip();
     for(i=0;i<PUFFS.length;i++){
       var q=PUFFS[i];
-      var hw=cw/2*(0.72+0.28*Math.sin(q.v*Math.PI));
-      if(q.v>0.82) hw*=1+0.45*ks;
-      var px=CX+q.u*hw, py=BASE-q.v*ch, pr=(20+16*q.r)*(0.8+0.35*ks);
-      ctx.fillStyle=mix([255,255,255],[86,98,112],ks*(1-q.v*0.75));
+      var hw=cw/2*(0.78+0.22*Math.sin(q.v*Math.PI));
+      if(q.v>0.86) hw*=1+0.6*anvil;
+      var px=CX+q.u*hw, py=BASE-q.v*ch, pr=(22+16*q.r)*(0.85+0.15*ks);
+      var shade=Math.pow(1-q.v,1.3)*(0.6+0.4*ks);
+      ctx.fillStyle=mix([255,255,255],[62,70,84],shade);
       ctx.beginPath();ctx.arc(px,py,pr,0,6.3);ctx.fill();
     }
+    ctx.restore();
+
+    /* 구름 아래 비 기둥: 비가 내리는 곳만 어둑하다 */
+    var rh=cw/2-10, rs=ctx.createLinearGradient(CX-rh,0,CX+rh,0), ra=0.12+0.3*ks;
+    rs.addColorStop(0,'rgba(78,90,106,0)');rs.addColorStop(0.25,'rgba(78,90,106,'+ra+')');
+    rs.addColorStop(0.75,'rgba(78,90,106,'+ra+')');rs.addColorStop(1,'rgba(78,90,106,0)');
+    ctx.fillStyle=rs;ctx.fillRect(CX-rh,BASE+8,rh*2,H-BASE);
 
     /* 비 */
     ctx.strokeStyle='rgba(21,82,184,.85)';ctx.lineWidth=2+ks*1.2;ctx.lineCap='round';
@@ -385,8 +377,8 @@
 
     /* 바다 */
     var sg=ctx.createLinearGradient(0,SEA,0,H);
-    sg.addColorStop(0,mix([58,150,214],[232,120,70],Math.min(1,k*1.1)));
-    sg.addColorStop(0.5,mix([30,112,186],[60,116,170],k));
+    sg.addColorStop(0,mix([58,150,214],[72,172,206],k));
+    sg.addColorStop(0.5,mix([30,112,186],[34,124,184],k));
     sg.addColorStop(1,'#17528f');
     ctx.fillStyle=sg;
     ctx.beginPath();ctx.moveTo(0,SEA);
@@ -402,17 +394,17 @@
     ctx.beginPath();ctx.moveTo(TERR[0][0],TERR[0][1]);
     for(i=1;i<TERR.length;i++) ctx.lineTo(TERR[i][0],TERR[i][1]);ctx.stroke();
 
-    label('남해 바다',40,535,26,'#ffffff','left');
-    label('해수온 '+T.toFixed(1)+'℃',40,572,21,'#ffffff','left');
-    label('경남의 산지',800,450,24,'#ffffff','center');
+    label('남해 바다',40,668,26,'#ffffff','left');
+    label('해수온 '+T.toFixed(1)+'℃',40,699,21,'#ffffff','left');
+    label('경남의 산지',800,600,24,'#ffffff','center');
 
     /* 바람 화살표 */
     var wc='rgba(20,48,74,.6)';
-    arrow(150,330,250,330,wc,4);arrow(330,385,430,385,wc,4);
-    label('남풍',150,304,21,'#14304a','left','rgba(255,255,255,.75)');
+    arrow(150,500,250,500,wc,4);arrow(330,555,430,555,wc,4);
+    label('남풍',150,474,21,'#14304a','left','rgba(255,255,255,.75)');
     var sl=0.75+0.5*ks;
-    arrow(585,425,585+60*sl,425-45*sl,wc,4);
-    arrow(680,350,680+60*sl,350-45*sl,wc,4);
+    arrow(590,590,590+58*sl,590-48*sl,wc,4);
+    arrow(690,505,690+58*sl,505-48*sl,wc,4);
 
     /* 수증기와 물방울 */
     for(i=0;i<vapor.length;i++){
@@ -459,8 +451,6 @@
   }
 
   slider.addEventListener('input',function(){setTemp(parseFloat(slider.value));});
-  var ps=document.querySelectorAll('.preset');
-  for(var i=0;i<ps.length;i++) ps[i].addEventListener('click',function(){setTemp(parseFloat(this.dataset.t));});
   document.getElementById('tabs').addEventListener('click',function(e){
     var b=e.target.closest('.tab'); if(b) setStep(Number(b.dataset.s));
   });
