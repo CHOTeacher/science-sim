@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>미니 전동기: 양쪽을 모두 벗기면?</title>
+<style>
+  :root{
+    --bg:#f4f7fb;
+    --panel:#ffffff;
+    --line:#d5dde8;
+    --ink:#1c2733;
+    --ink-dim:#566475;
+    --current:#e03131;
+    --field:#1864ab;
+    --force:#2b8a3e;
+    --accent:#d9480f;
+  }
+  *{box-sizing:border-box;}
+  html{font-size:clamp(16px,1.15vw,24px);}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+    line-height:1.55;
+  }
+  .wrap{max-width:1500px;margin:0 auto;padding:1rem 1rem 2rem;}
+  h1{font-size:1.7rem;margin:0 0 .2rem;}
+  header p{margin:0;color:var(--ink-dim);font-size:1rem;}
+
+  .modes{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:.9rem 0 .7rem;}
+  .modes .cap{font-weight:700;margin-right:.2rem;}
+  .mode-btn{
+    font:inherit;font-weight:700;font-size:1.05rem;
+    padding:.6rem 1.1rem;border-radius:.7rem;
+    border:2px solid var(--line);background:var(--panel);color:var(--ink-dim);
+    cursor:pointer;
+  }
+  .mode-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .mode-btn:focus-visible,.btn:focus-visible{outline:3px solid #1670bf;outline-offset:2px;}
+
+  .views{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-top:.9rem;}
+  .views.single{grid-template-columns:1fr;}
+  .views.single .card{width:100%;max-width:max(20rem,72vh);margin:0 auto;}
+  @media (max-width:900px){.views{grid-template-columns:1fr;}}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:1rem;
+    padding:.6rem .7rem .7rem;
+  }
+  .card[hidden]{display:none;}
+  .card h2{font-size:1.2rem;margin:.1rem 0 .3rem;}
+  canvas{display:block;width:100%;height:auto;cursor:grab;touch-action:none;}
+  canvas.dragging{cursor:grabbing;}
+  .msg{
+    margin-top:.4rem;background:#fff8e6;border:2px solid #f0c36d;border-radius:.8rem;
+    padding:.5rem .8rem;font-size:1.1rem;font-weight:700;min-height:7em;
+  }
+  .axle-key{display:flex;gap:1rem;flex-wrap:wrap;font-size:.95rem;color:var(--ink-dim);margin-top:.6rem;}
+  .sw{display:inline-block;width:1.6em;height:.5em;border-radius:.25em;vertical-align:.12em;margin-right:.35em;border:1px solid #3d2812;}
+  .sw.bare{background:#f2a444;}
+  .sw.enamel{background:#6b2f14;}
+
+  .controls{
+    margin-top:.8rem;display:flex;gap:.6rem 1rem;flex-wrap:wrap;align-items:center;
+  }
+  .btn{
+    font:inherit;font-weight:700;font-size:1.05rem;
+    padding:.6rem 1.1rem;border-radius:.7rem;border:2px solid #1670bf;
+    background:#1670bf;color:#fff;cursor:pointer;min-height:2.8rem;
+  }
+  .btn.ghost{background:#fff;color:#1670bf;}
+  label.chk{display:inline-flex;align-items:center;gap:.4rem;font-size:1rem;cursor:pointer;}
+  label.chk input{width:1.3rem;height:1.3rem;}
+  .legend{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.7rem;}
+  .legend label{
+    display:inline-flex;align-items:center;gap:.45rem;font-weight:700;font-size:1.05rem;
+    border:2px solid currentColor;border-radius:.7rem;padding:.35rem .8rem;background:#fff;cursor:pointer;
+  }
+  .legend input{width:1.2rem;height:1.2rem;}
+  .legend .lc{color:var(--current);} .legend .lf{color:var(--field);} .legend .lp{color:var(--force);}
+  .legend span.note{color:var(--ink-dim);font-weight:400;font-size:.9rem;}
+  .slider-row{margin-top:.8rem;display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;}
+  .slider-row label{font-weight:700;}
+  .slider-row input[type=range]{flex:1;min-width:14rem;height:2.4rem;}
+  .slider-row output{font-weight:700;min-width:3.5em;text-align:right;}
+
+  .explain{margin-top:1rem;}
+  .explain h2{font-size:1.2rem;margin:.2rem 0 .4rem;}
+  .explain ol{margin:.2rem 0 0;padding-left:1.4rem;}
+  .explain li{margin:.25rem 0;}
+  .c-current{color:var(--current);font-weight:700;}
+  .c-field{color:var(--field);font-weight:700;}
+  .c-force{color:var(--force);font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>미니 전동기: 코일의 양쪽을 모두 벗기면 왜 계속 돌지 못할까?</h1>
+  </header>
+
+  <div class="views" id="views">
+    <div class="card" id="cardBoth">
+      <h2>양쪽 모두 다 벗김</h2>
+      <canvas id="cvBoth" width="560" height="580" aria-label="코일의 양쪽을 모두 벗긴 미니 전동기"></canvas>
+      <div class="msg" id="msgBoth" aria-live="polite"></div>
+    </div>
+    <div class="card" id="cardHalf">
+      <h2>한쪽은 다, 다른 쪽은 반만 벗김</h2>
+      <canvas id="cvHalf" width="560" height="580" aria-label="코일의 한쪽을 반만 벗긴 미니 전동기"></canvas>
+      <div class="msg" id="msgHalf" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="btnPlay">▶ 놓았을 때 움직임 보기</button>
+    <button class="btn ghost" id="btnReset">처음으로</button>
+    <button class="btn ghost" id="btnPush">손으로 툭 치기</button>
+    <label class="chk"><input type="checkbox" id="slow">더 천천히 보기</label>
+  </div>
+  <div class="slider-row">
+    <label for="ang">코일을 직접 돌려 보기</label>
+    <button class="btn ghost" id="btn0">0° (A가 위)</button>
+    <button class="btn ghost" id="btn180">180° (A가 아래)</button>
+    <input type="range" id="ang" min="0" max="360" step="1" value="0">
+    <output id="angOut">0°</output>
+  </div>
+
+  <div class="card explain">
+    <h2>정리</h2>
+    <ol>
+      <li>자석 위에서 <span class="c-field">자기장</span>은 위쪽을 향합니다. A와 B에는 <span class="c-current">전류</span>가 서로 반대 방향으로 흐릅니다. 그래서 A와 B가 받는 <span class="c-force">힘</span>도 서로 반대 방향입니다.</li>
+      <li>양쪽을 모두 벗기면 코일이 어느 쪽을 향해도 전류가 끊기지 않고 <b>같은 방향</b>으로 흐릅니다. 그래서 A가 받는 힘은 <b>언제나 같은 방향</b>입니다.</li>
+      <li>A가 위쪽에 있을 때는 이 힘이 코일을 시계 방향으로 돌립니다. 하지만 A가 아래쪽으로 넘어가면, 같은 방향의 힘이 이번에는 코일을 <b>시계 반대 방향</b>으로 돌립니다. 그래서 반 바퀴쯤 돌다가 되돌아옵니다.</li>
+      <li>한쪽을 반만 벗기면 코일이 180° 돌아 A가 아래로 왔을 때 전류가 끊깁니다. 반대로 돌리는 힘이 생기지 않으므로, 관성에 의해 반 바퀴를 넘어가 계속 한 방향으로 돕니다.</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var W=560,H=580;
+  var COL={current:'#e03131',field:'#1864ab',force:'#2b8a3e',wire:'#6b4a2b',ink:'#1c2733',bare:'#f2a444',enamel:'#6b2f14'};
+  var FONT="'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif";
+
+  // 회전을 느리게: 돌리는 힘(K)을 작게 잡았다. 값은 모형 값이다.
+  var K=0.8, PUSH=1.6;
+  // th = A 변의 각도(위쪽이 0), om = 각속도
+  function makeSim(mode,damp,cvId,cardId,msgId){
+    var cv=document.getElementById(cvId);
+    return {mode:mode,damp:damp,th:0,om:0,cv:cv,ctx:cv.getContext('2d'),
+      card:document.getElementById(cardId),msg:document.getElementById(msgId),key:''};
+  }
+  var sims=[makeSim('both',0.06,'cvBoth','cardBoth','msgBoth'),
+            makeSim('half',0.07,'cvHalf','cardHalf','msgHalf')];
+  var playing=false,last=0;
+
+  var slow=document.getElementById('slow'), ang=document.getElementById('ang'), angOut=document.getElementById('angOut');
+  var btnPlay=document.getElementById('btnPlay'), views=document.getElementById('views');
+
+  // 반만 벗긴 쪽: 벗긴 부분이 조금이라도 닿으면 전류가 흐른다고 보고, 180° 앞뒤(135°~225°)에서만 끊는다(선생님 결정).
+  var CUT=-Math.cos(Math.PI/4);
+  function flowing(s){ return s.mode==='both' || Math.cos(s.th)>CUT; }
+  function torque(s){ return flowing(s) ? K*Math.cos(s.th) : 0; }
+
+  function fit(cv,ctx){
+    var dpr=window.devicePixelRatio||1, cw=cv.clientWidth||W;
+    var pw=Math.round(cw*dpr), ph=Math.round(cw*H/W*dpr);
+    if(cv.width!==pw||cv.height!==ph){cv.width=pw;cv.height=ph;}
+    ctx.setTransform(pw/W,0,0,pw/W,0,0);
+    ctx.clearRect(0,0,W,H);
+    ctx.lineCap='round';ctx.lineJoin='round';
+  }
+
+  function arrow(c,x1,y1,x2,y2,o){
+    var dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy);
+    if(len<1) return;
+    var ux=dx/len,uy=dy/len,h=Math.min(o.head||14,len*0.7),hw=h*0.62;
+    var bx=x2-ux*h,by=y2-uy*h;
+    function body(color,w,extra){
+      c.strokeStyle=color;c.fillStyle=color;c.lineWidth=w;
+      c.setLineDash(o.dash||[]);
+      c.beginPath();c.moveTo(x1,y1);c.lineTo(bx,by);c.stroke();
+      c.setLineDash([]);
+      c.beginPath();
+      c.moveTo(x2+ux*extra,y2+uy*extra);
+      c.lineTo(bx-uy*(hw+extra)-ux*extra,by+ux*(hw+extra)-uy*extra);
+      c.lineTo(bx+uy*(hw+extra)-ux*extra,by-ux*(hw+extra)-uy*extra);
+      c.closePath();c.fill();
+    }
+    if(o.halo) body('#ffffff',o.w+4,3);
+    body(o.color,o.w,0);
+  }
+
+  function label(c,text,x,y,color,size,align){
+    c.font='700 '+(size||20)+'px '+FONT;
+    c.textAlign=align||'center';c.textBaseline='middle';
+    c.lineWidth=5;c.strokeStyle='#ffffff';c.strokeText(text,x,y);
+    c.fillStyle=color;c.fillText(text,x,y);
+  }
+
+  function badge(c,text,x,y,filled){
+    c.beginPath();c.arc(x,y,15,0,Math.PI*2);
+    c.fillStyle=filled?'#1c2733':'#ffffff';c.fill();
+    c.lineWidth=3;c.strokeStyle='#1c2733';c.stroke();
+    c.font='700 18px '+FONT;c.textAlign='center';c.textBaseline='middle';
+    c.fillStyle=filled?'#ffffff':'#1c2733';c.fillText(text,x,y+1);
+  }
+
+  // ---------- 비스듬히 본 그림 ----------
+  var YAW=50*Math.PI/180, PIT=22*Math.PI/180, S=95, CX=275, CY=234;
+  var cy_=Math.cos(YAW), sy_=Math.sin(YAW), cp_=Math.cos(PIT), sp_=Math.sin(PIT);
+  function P(x,y,z){
+    var xr=x*cy_-y*sy_, dep=x*sy_+y*cy_;
+    return {X:CX+S*xr, Y:CY-S*(z*cp_+dep*sp_), d:dep*cp_-z*sp_};
+  }
+  function poly(c,pts,fill,stroke){
+    c.beginPath();
+    for(var i=0;i<pts.length;i++){ if(i) c.lineTo(pts[i].X,pts[i].Y); else c.moveTo(pts[i].X,pts[i].Y); }
+    c.closePath();c.fillStyle=fill;c.fill();
+    if(stroke){c.lineWidth=2;c.strokeStyle=stroke;c.stroke();}
+  }
+  function line(c,a,b,color,w){
+    c.strokeStyle=color;c.lineWidth=w;c.beginPath();c.moveTo(a.X,a.Y);c.lineTo(b.X,b.Y);c.stroke();
+  }
+  function wire(c,a,b,w,color){
+    line(c,a,b,'#3d2812',w+3); line(c,a,b,color||COL.wire,w);
+  }
+  // 전류 화살표: a→b 방향으로, a에서 f0만큼 간 곳에서 시작한다. 길이는 화면에서 모두 같다(CL).
+  var CL=34;
+  function curArrow(c,a,b,f0){
+    var dx=b.X-a.X, dy=b.Y-a.Y, m=Math.sqrt(dx*dx+dy*dy)||1;
+    var x=a.X+dx*f0, y=a.Y+dy*f0;
+    arrow(c,x,y,x+dx/m*CL,y+dy/m*CL,{color:COL.current,w:3.5,head:12,halo:true});
+  }
+  // 축이 x 방향인 원기둥. xa가 보는 사람 쪽 끝.
+  function cyl(c,xa,xb,r,zc,fill,capFill){
+    function ring(x){
+      var pts=[];
+      for(var i=0;i<40;i++){ var a=i/40*Math.PI*2; pts.push(P(x,r*Math.cos(a),zc+r*Math.sin(a))); }
+      return pts;
+    }
+    var near=ring(xa), far=ring(xb), ca=P(xa,0,zc), cb=P(xb,0,zc);
+    var ux=cb.X-ca.X, uy=cb.Y-ca.Y, best=0, bv=-1e9;
+    for(var i=0;i<40;i++){
+      var v=ux*(near[i].Y-ca.Y)-uy*(near[i].X-ca.X);
+      if(v>bv){bv=v;best=i;}
+    }
+    var opp=(best+20)%40;
+    poly(c,far,fill,'#1c2733');
+    poly(c,[near[best],far[best],far[opp],near[opp]],fill);
+    line(c,near[best],far[best],'#1c2733',2); line(c,near[opp],far[opp],'#1c2733',2);
+    poly(c,near,capFill,'#1c2733');
+  }
+
+  function draw(s){
+    var c=s.ctx; fit(s.cv,c);
+    var on=flowing(s), R=1, w=1, th=s.th;
+    var ay=-R*Math.sin(th), az=R*Math.cos(th);
+    var BZ=-2.05, BR=0.42, HX=2.3, HY=0.55, HT=BZ-0.1, HB=BZ-0.55, SXN=-2.07, SXF=2.05;
+
+    // 구리 막대: 위쪽 구멍에 코일의 축을 끼운다. 축은 구멍의 아래쪽에 얹혀 닿는다.
+    function strip(sx,zb){
+      var pts=[P(sx,-0.28,zb),P(sx,0.28,zb),P(sx,0.28,0.52),P(sx,-0.28,0.52)], i, a, q;
+      c.beginPath();
+      for(i=0;i<4;i++){ if(i) c.lineTo(pts[i].X,pts[i].Y); else c.moveTo(pts[i].X,pts[i].Y); }
+      c.closePath();
+      for(i=0;i<24;i++){
+        a=i/24*Math.PI*2; q=P(sx,0.22*Math.cos(a),0.18+0.22*Math.sin(a));
+        if(i) c.lineTo(q.X,q.Y); else c.moveTo(q.X,q.Y);
+      }
+      c.closePath();
+      c.fillStyle='#e8b676';c.fill('evenodd');
+      c.lineWidth=2;c.strokeStyle='#8a5a1e';c.stroke();
+      if(on){
+        if(sx<0) curArrow(c,P(sx,0,-1.1),P(sx,0,-0.5),0);
+        else curArrow(c,P(sx,0,-0.6),P(sx,0,-1.2),0);
+      }
+    }
+    // 축(코일의 날개). 에나멜 선은 굵고(RE), 벗긴 곳은 에나멜 두께만큼 가늘다(RB).
+    // half면 둘레의 절반(A 쪽 180°)에만 에나멜이 남는다. 둥근 선의 겉면을 길쭉한 띠로 나누어 칠한다.
+    var RE=0.044, RB=0.022, PAD=0.024, // 띠의 굵기만큼(PAD) 더 굵게 보이므로, 에나멜 쪽 겉모습이 코일 선(굵기 13)과 같아지게 잡은 값
+         NS=28, phiA=Math.atan2(az,ay);
+    // 구멍 모양으로 잘라 그리기: 막대 뒤쪽의 날개가 구멍 속으로 이어져 보이게 한다.
+    function throughHole(sx,draw){
+      var i,a,q;
+      c.save(); c.beginPath();
+      for(i=0;i<24;i++){
+        a=i/24*Math.PI*2; q=P(sx,0.22*Math.cos(a),0.18+0.22*Math.sin(a));
+        if(i) c.lineTo(q.X,q.Y); else c.moveTo(q.X,q.Y);
+      }
+      c.closePath(); c.clip(); draw(); c.restore();
+    }
+    // 속이 찬 구리선(RB) 위에, half면 둘레의 절반에만 에나멜 껍질(RE)이 덮여 있다.
+    function axle(x0,x1,half,cap){
+      function vis(phi){ return -Math.cos(phi)*cy_*cp_+Math.sin(phi)*sp_>0; }
+      function strips(r,test,color,mark){
+        var pass,i,phi;
+        c.lineCap='butt';
+        for(pass=0;pass<2;pass++){
+          for(i=0;i<NS;i++){
+            phi=(i+0.5)/NS*Math.PI*2;
+            if(!vis(phi)||(test&&!test(phi))) continue;
+            line(c,P(x0,r*Math.cos(phi),r*Math.sin(phi)),P(x1,r*Math.cos(phi),r*Math.sin(phi)),
+              pass===0?'#3d2812':(mark&&Math.cos(3*(phi-phiA))>0.75?mark:color),pass===0?4.6:2.6);
+          }
+        }
+        c.lineCap='round';
+      }
+      function core(){ strips(RB,null,COL.bare,'#b86a12'); } // 줄무늬 세 줄이 코일과 함께 돌아 회전이 보인다
+      function shell(){
+        [-1,1].forEach(function(sg){ // 에나멜 껍질의 잘린 옆면
+          var pe=phiA+sg*Math.PI/2, cy2=Math.cos(pe), sz2=Math.sin(pe);
+          poly(c,[P(x0,RB*cy2,RB*sz2),P(x0,(RE+PAD)*cy2,(RE+PAD)*sz2),P(x1,(RE+PAD)*cy2,(RE+PAD)*sz2),P(x1,RB*cy2,RB*sz2)],'#4a3018');
+        });
+        strips(RE,function(phi){ return Math.cos(phi-phiA)>0; },COL.wire);
+      }
+      if(!half) core();
+      else if(vis(phiA)){ core(); shell(); }
+      else { shell(); core(); }
+      if(cap){ // 보는 사람 쪽 끝의 단면
+        var xc=Math.min(x0,x1), k, a, ring=[], arc=[];
+        for(k=0;k<20;k++){ a=k/20*Math.PI*2; ring.push(P(xc,(RB+PAD)*Math.cos(a),(RB+PAD)*Math.sin(a))); }
+        if(half){
+          for(k=0;k<=12;k++){ a=phiA-Math.PI/2+k/12*Math.PI; arc.push(P(xc,(RE+PAD)*Math.cos(a),(RE+PAD)*Math.sin(a))); }
+          for(k=12;k>=0;k--){ a=phiA-Math.PI/2+k/12*Math.PI; arc.push(P(xc,(RB+PAD)*Math.cos(a),(RB+PAD)*Math.sin(a))); }
+          c.lineWidth=1.5; poly(c,arc,'#8a6238'); c.strokeStyle='#3d2812'; c.lineWidth=1.2; c.stroke();
+        }
+        poly(c,ring,'#f7c078'); c.strokeStyle='#3d2812'; c.lineWidth=1.2; c.stroke();
+      }
+    }
+    // 전지 끼우개 뒤쪽 벽 → 먼 쪽 구리 막대 → 건전지 → 자석
+    poly(c,[P(-HX,HY,HB),P(HX,HY,HB),P(HX,HY,HT),P(-HX,HY,HT)],'#495057','#1c2733');
+    poly(c,[P(HX,-HY,HB),P(HX,HY,HB),P(HX,HY,HT),P(HX,-HY,HT)],'#495057','#1c2733');
+    strip(SXF,HB);
+    cyl(c,-1.4,1.97,BR,BZ,'#343a40','#343a40');
+    cyl(c,-1.9,-1.4,BR,BZ,'#e0a030','#ced4da');
+    cyl(c,-2.0,-1.9,0.15,BZ,'#ced4da','#e9ecef');
+
+    var mt=P(0,0,-1.38), mb=P(0,0,-1.63), mr=0.55*S;
+    c.fillStyle='#9aa3ad';c.strokeStyle='#4a5560';c.lineWidth=2;
+    c.beginPath();c.ellipse(mb.X,mb.Y,mr,mr*sp_,0,0,Math.PI);
+    c.lineTo(mt.X-mr,mt.Y);c.ellipse(mt.X,mt.Y,mr,mr*sp_,0,Math.PI,0,true);c.closePath();c.fill();c.stroke();
+    c.fillStyle='#d5dbe1';c.beginPath();c.ellipse(mt.X,mt.Y,mr,mr*sp_,0,0,Math.PI*2);c.fill();c.stroke();
+    label(c,'N',mt.X-24,mt.Y+2,'#c92a2a',18);
+
+    var items=[];
+    items.push({d:P(SXN,0,-0.8).d, f:function(){ strip(SXN,HB); }});
+    items.push({d:P(SXF,0,-0.4).d, f:function(){ strip(SXF,-1.5); }});
+    // 자기장: 화살표 하나만
+    items.push({d:P(0,0,0).d, f:function(){
+      var a=P(0,0,-1.38), b=P(0,0,1.8);
+      arrow(c,a.X,a.Y,b.X,b.Y,{color:COL.field,w:4,head:18,dash:[10,8]});
+      label(c,'자기장',b.X,b.Y-18,COL.field,20);
+    }});
+    // 축: 보는 사람 쪽 끝이 '반만 벗김'이 되는 쪽.
+    // 날개는 한 줄로 이어서 그린다. 구리 막대 뒤로 가는 부분만 막대에 가려지고, 구멍 속과 막대 앞쪽은 그대로 보인다.
+    var half=(s.mode==='half');
+    function beside(sx,draw){ // 화면에서 막대 면의 왼쪽(−x 쪽)만 그리기
+      var o=P(sx,0,0), ux=-cy_, uy=sy_*sp_, m=Math.sqrt(ux*ux+uy*uy), L=900;
+      ux/=m; uy/=m;
+      c.save(); c.beginPath();
+      c.moveTo(o.X-uy*L,o.Y+ux*L); c.lineTo(o.X+uy*L,o.Y-ux*L);
+      c.lineTo(o.X+uy*L+ux*L,o.Y-ux*L+uy*L); c.lineTo(o.X-uy*L+ux*L,o.Y+ux*L+uy*L);
+      c.closePath(); c.clip(); draw(); c.restore();
+    }
+    function enamel(xa,xb,face){ // 에나멜이 남은 굵은 부분. xa 쪽 끝은 반듯하게 잘린 면
+      c.lineCap='butt'; wire(c,P(xa,0,0),P(xb,0,0),10); c.lineCap='round';
+      if(face){
+        var ring=[],k,a;
+        for(k=0;k<20;k++){ a=k/20*Math.PI*2; ring.push(P(xa,0.066*Math.cos(a),0.066*Math.sin(a))); }
+        poly(c,ring,'#8a6238'); c.strokeStyle='#3d2812'; c.lineWidth=1.5; c.stroke();
+      }
+    }
+    function nearAxle(cap){ axle(-2.75,-1.62,half,cap); }
+    function farAxle(){ axle(1.62,2.75,false,false); }
+    items.push({d:P(-1.6,0,0).d, f:function(){
+      enamel(-1.62,-w,true);
+      nearAxle(false);
+      if(on) curArrow(c,P(-1.58,0,0),P(-1,0,0),0);
+    }});
+    items.push({d:P(-2.3,0,0).d, f:function(){
+      throughHole(SXN,function(){ nearAxle(false); });
+      beside(SXN,function(){ nearAxle(true); });
+    }});
+    items.push({d:P(2.3,0,0).d, f:farAxle});
+    items.push({d:P(1.6,0,0).d, f:function(){
+      throughHole(SXF,farAxle);
+      beside(SXF,farAxle);
+      enamel(1.62,w,false);
+      if(on) curArrow(c,P(1.07,0,0),P(1.6,0,0),0);
+    }});
+    // 코일 네 변 (전류: A 변에서 +x, B 변에서 -x)
+    var p1=[-w,ay,az],p2=[w,ay,az],p3=[w,-ay,-az],p4=[-w,-ay,-az], segs=[];
+    [[p1,p2,0.5],[p2,p3,0.55],[p3,p4,0.5],[p4,p1,0.55]].forEach(function(q){
+      var a=P(q[0][0],q[0][1],q[0][2]), b=P(q[1][0],q[1][1],q[1][2]);
+      var it={d:(a.d+b.d)/2, f:function(){
+        wire(c,a,b,10);
+        if(on) curArrow(c,a,b,q[2]);
+      }};
+      items.push(it); segs.push(it);
+    });
+    items.sort(function(u,v){return v.d-u.d;});
+    items.forEach(function(it){it.f();});
+
+    // 힘 화살표: 전류 화살표와 같은 점(변의 가운데)에서 시작하고, 화면에서 수평으로 그린다(선생님 요청).
+    // 구리 막대 같은 것에는 가려지지 않게 맨 나중에 그리되, 화살표보다 앞에 있는 코일 변은 다시 그려서
+    // 화살표가 그 변 뒤로 지나가게 한다(B의 힘은 먼 쪽을 향하므로 앞쪽 변 뒤로 간다).
+    var FL=64;
+    if(on){
+      [{q:P(0,ay,az), sg:1, d:P(0,ay-0.4,az).d}, {q:P(0,-ay,-az), sg:-1, d:P(0,-ay+0.4,-az).d}]
+      .sort(function(u,v){return v.d-u.d;})
+      .forEach(function(fo){
+        arrow(c,fo.q.X,fo.q.Y,fo.q.X+fo.sg*FL,fo.q.Y,{color:COL.force,w:6,head:18,halo:true});
+        segs.filter(function(it){return it.d<fo.d-0.02;})
+            .sort(function(u,v){return v.d-u.d;})
+            .forEach(function(it){it.f();});
+      });
+    }
+
+    // 전지 끼우개 앞쪽 벽
+    poly(c,[P(-HX,-HY,HB),P(HX,-HY,HB),P(HX,-HY,HT),P(-HX,-HY,HT)],'#212529','#000');
+    poly(c,[P(-HX,-HY,HB),P(-HX,HY,HB),P(-HX,HY,HT),P(-HX,-HY,HT)],'#343a40','#000');
+    c.font='700 17px '+FONT;c.fillStyle='#fff';c.textAlign='center';c.textBaseline='middle';
+    var pp=P(-HX,0,BZ-0.2), pm=P(HX,0,BZ+0.1);
+    label(c,'(+)극',pp.X-58,pp.Y-6,COL.ink,17); label(c,'(−)극',pm.X+36,pm.Y,COL.ink,17);
+    var sn=P(-2.75,0,0), sf=P(2.75,0,0);
+
+    // 힘
+    var A=P(0,ay,az), B=P(0,-ay,-az);
+    if(on){
+      label(c,'힘',A.X+FL+20,A.Y,COL.force,22);
+      label(c,'힘',B.X-FL-20,B.Y,COL.force,22);
+    }
+    var la=P(-0.72,ay,az), lb=P(0.72,-ay,-az);
+    badge(c,'A',la.X,la.Y,true); badge(c,'B',lb.X,lb.Y,false);
+
+    if(on){
+      var cl=P(-2.05,0,-0.9); label(c,'전류',cl.X-40,cl.Y,COL.current,20);
+    }
+  }
+
+  // ---------- 상태 글 ----------
+  function updateMsg(s){
+    var on=flowing(s), co=Math.cos(s.th);
+    var still=Math.abs(s.om)<0.03;
+    var zone=co>0?'up':'down';
+    var rest=still&&Math.abs(co)<0.06&&playing;
+    var key=[zone,rest,still,on].join('|');
+    if(key===s.key) return; s.key=key;
+    var msg;
+    if(s.mode==='both'){
+      if(rest) msg='멈춤. 두 힘이 코일을 양쪽으로 잡아당기기만 하고 돌리지는 못한다.';
+      else if(zone==='up') msg='A가 위쪽에 있다. 힘이 코일을 시계 방향(↻)으로 돌린다.';
+      else msg='A가 아래쪽으로 넘어왔다. 전류의 방향이 그대로라서 힘의 방향도 그대로다. 그래서 이번에는 코일을 반대 방향(↺)으로 돌린다. → 느려지다가 되돌아간다.';
+    }else{
+      if(zone==='up') msg='벗긴 부분이 구리 막대에 닿아 전류가 흐른다. 힘이 코일을 시계 방향(↻)으로 돌린다.';
+      else if(on) msg='A가 아래쪽으로 넘어왔지만, 벗긴 부분이 아직 구리 막대에 조금 닿아 있어 전류가 흐른다.';
+      else msg='180° 돌아 A가 아래로 왔다. 에나멜이 남은 부분만 구리 막대에 닿아 전류가 끊긴다. 반대로 돌리는 힘이 없으므로 관성에 의해 계속 돈다.'+(still?' (멈춰 있으면 ‘손으로 툭 치기’)':'');
+    }
+    s.msg.textContent=msg;
+  }
+
+  function render(){
+    sims.forEach(function(s){ if(!s.card.hidden) draw(s); updateMsg(s); });
+    var ref=sims[0].card.hidden?sims[1]:sims[0];
+    var deg=Math.round(((ref.th*180/Math.PI)%360+360)%360)%360;
+    if(document.activeElement!==ang) ang.value=deg;
+    angOut.textContent=deg+'°';
+  }
+
+  function step(dt){
+    var n=8,h=dt/n;
+    sims.forEach(function(s){
+      for(var i=0;i<n;i++){
+        s.om+=(torque(s)-s.damp*s.om)*h;
+        s.th+=s.om*h;
+      }
+    });
+  }
+
+  function frame(ts){
+    if(playing){
+      var dt=Math.min((ts-last)/1000,0.05); last=ts;
+      step(dt*(slow.checked?0.4:1));
+    }
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  function setPlaying(p){
+    playing=p; last=performance.now();
+    btnPlay.textContent=p?'❚❚ 멈춤':'▶ 놓았을 때 움직임 보기';
+  }
+  // 그림의 코일을 잡고 직접 돌리기
+  function pointerAngle(e,cv){
+    var r=cv.getBoundingClientRect(), o=P(0,0,0);
+    var dx=(e.clientX-r.left)*W/r.width-o.X, dy=(e.clientY-r.top)*H/r.height-o.Y;
+    var sn=dx/(S*sy_), cs=(-dy/S+cy_*sp_*sn)/cp_;
+    return Math.atan2(sn,cs);
+  }
+  sims.forEach(function(s){
+    var lastA=null;
+    s.cv.addEventListener('pointerdown',function(e){
+      setPlaying(false); sims.forEach(function(q){ q.om=0; });
+      lastA=pointerAngle(e,s.cv);
+      s.cv.setPointerCapture(e.pointerId); s.cv.classList.add('dragging'); e.preventDefault();
+    });
+    s.cv.addEventListener('pointermove',function(e){
+      if(lastA===null) return;
+      var a=pointerAngle(e,s.cv), d=a-lastA;
+      if(d>Math.PI) d-=2*Math.PI; else if(d<-Math.PI) d+=2*Math.PI;
+      lastA=a;
+      var th=s.th+d;
+      sims.forEach(function(q){ q.th=th; });
+    });
+    function end(){ lastA=null; s.cv.classList.remove('dragging'); }
+    s.cv.addEventListener('pointerup',end); s.cv.addEventListener('pointercancel',end);
+  });
+
+  function setAngle(deg){
+    setPlaying(false);
+    sims.forEach(function(s){ s.th=deg*Math.PI/180; s.om=0; });
+  }
+
+  btnPlay.addEventListener('click',function(){ setPlaying(!playing); });
+  document.getElementById('btnReset').addEventListener('click',function(){ setAngle(0); });
+  document.getElementById('btnPush').addEventListener('click',function(){
+    sims.forEach(function(s){ s.om+=PUSH; }); setPlaying(true);
+  });
+  document.getElementById('btn0').addEventListener('click',function(){ setAngle(0); });
+  document.getElementById('btn180').addEventListener('click',function(){ setAngle(180); });
+  ang.addEventListener('input',function(){ setAngle(+ang.value); });
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
