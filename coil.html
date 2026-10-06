@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>자기장에서 전류가 흐르는 코일이 받는 힘</title>
+<style>
+  :root {
+    --ink: #1f2933;
+    --sub: #52606d;
+    --line: #d5dbe1;
+    --bg: #f4f7fa;
+    --card: #ffffff;
+    --cur: #e03131;    /* 전류 */
+    --fld: #1670bf;    /* 자기장 */
+    --frc: #2b9a3f;    /* 힘 */
+  }
+  * { box-sizing: border-box; }
+  html { font-size: clamp(16px, 1.25vw, 26px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1700px; margin: 0 auto; padding: 0.8rem 1rem 1.2rem; }
+  h1 { font-size: 1.5rem; margin: 0.2rem 0 0.7rem; }
+  .layout { display: grid; grid-template-columns: 1.3fr 1fr; gap: 1rem; align-items: start; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 0.8rem; }
+  .stage { padding: 0.4rem; }
+  .stage svg { display: block; width: 100%; height: auto; max-height: 82vh; }
+  .panel { padding: 1rem 1.1rem; }
+  .group { margin-bottom: 1.1rem; }
+  .group h2 { font-size: 1.05rem; margin: 0 0 0.4rem; display: flex; align-items: center; gap: 0.5rem; }
+  .mark { display: inline-block; width: 2.2rem; height: 0.9rem; flex: none; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  button {
+    font: inherit; font-weight: 700; color: var(--ink);
+    padding: 0.7rem 0.6rem; min-height: 3rem;
+    background: #fff; border: 2px solid #9aa5b1; border-radius: 0.6rem;
+    cursor: pointer; touch-action: manipulation;
+  }
+  button:hover { background: #eef3f8; }
+  button:focus-visible { outline: 3px solid #f59f00; outline-offset: 2px; }
+  .seg button[aria-pressed="true"] { background: #1f2933; border-color: #1f2933; color: #fff; }
+  .seg button[aria-pressed="true"]::before { content: "✔ "; }
+  #sw { width: 100%; font-size: 1.1rem; }
+  #sw[aria-pressed="true"] { background: #fff4e6; border-color: #d9480f; color: #a53a0a; }
+  .result {
+    border-left: 0.4rem solid var(--frc); background: #eefaf0;
+    padding: 0.8rem 0.9rem; border-radius: 0.4rem; font-size: 1.15rem; min-height: 4.6rem;
+  }
+  .result b { color: #1c7a2e; font-size: 1.25rem; }
+  .state { color: var(--sub); font-size: 0.95rem; margin-top: 0.5rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; margin: 1rem 0 0; padding: 0; list-style: none; font-weight: 700; }
+  .legend li { display: flex; align-items: center; gap: 0.4rem; }
+  svg text { font-family: inherit; font-weight: 700; paint-order: stroke; stroke: #fff; stroke-width: 6px; stroke-linejoin: round; }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .stage svg { max-height: 62vh; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>자기장에서 전류가 흐르는 코일이 받는 힘</h1>
+  <div class="layout">
+    <div class="card stage">
+      <svg id="scene" viewBox="0 0 1000 640" role="img" aria-label="말굽자석 사이에 매달려 전원 장치에 연결된 코일"></svg>
+    </div>
+
+    <div class="card panel">
+      <div class="group">
+        <button id="sw" aria-pressed="false">스위치 닫기 (전류 흐르게 하기)</button>
+      </div>
+
+      <div class="group">
+        <h2><svg class="mark" viewBox="0 0 44 18"><path d="M2 9H30" stroke="#e03131" stroke-width="5"/><path d="M42 9L28 1V17Z" fill="#e03131"/></svg>전류의 방향</h2>
+        <div class="seg" id="curSeg">
+          <button data-v="1" aria-pressed="true">처음 방향</button>
+          <button data-v="-1" aria-pressed="false">반대 방향</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2><svg class="mark" viewBox="0 0 44 18"><path d="M2 9H30" stroke="#1670bf" stroke-width="5"/><path d="M42 9L28 1V17Z" fill="#1670bf"/></svg>자기장의 방향</h2>
+        <div class="seg" id="fldSeg">
+          <button data-v="1" aria-pressed="true">처음 방향<br>(N극이 아래)</button>
+          <button data-v="-1" aria-pressed="false">반대 방향<br>(N극이 위)</button>
+        </div>
+      </div>
+
+      <div class="result" id="result" aria-live="polite"></div>
+      <div class="state" id="state"></div>
+
+      <ul class="legend">
+        <li><svg class="mark" viewBox="0 0 44 18"><path d="M2 9H30" stroke="#e03131" stroke-width="5"/><path d="M42 9L28 1V17Z" fill="#e03131"/></svg>전류</li>
+        <li><svg class="mark" viewBox="0 0 44 18"><path d="M2 9H30" stroke="#1670bf" stroke-width="5"/><path d="M42 9L28 1V17Z" fill="#1670bf"/></svg>자기장</li>
+        <li><svg class="mark" viewBox="0 0 44 18"><path d="M2 9H30" stroke="#2b9a3f" stroke-width="7"/><path d="M42 9L28 0V18Z" fill="#2b9a3f"/></svg>힘</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- 상태 ----
+  var on = false;      // 전류가 흐르는가
+  var cur = 1;         // +1: 처음 방향(아래 변에서 앞 → 뒤), -1: 반대
+  var fld = 1;         // +1: 자기장 위쪽(N극이 아래), -1: 반대
+  var th = 0, vel = 0; // 코일이 기울어진 각(rad)과 각속도
+  var MAXTH = 11 * Math.PI / 180;
+
+  // ---- 비스듬히 본 그림: x 오른쪽(자석 바깥쪽), y 위, z 보는 사람 쪽 ----
+  var U = 92, OX = 370, OY = 450, PIV = 3.8;
+  function P(x, y, z) { return [OX + (x - 0.45 * z) * U, OY + (-y + 0.3 * z) * U]; }
+  // 코일은 위쪽 가로대(y = PIV)를 축으로 그네처럼 흔들린다
+  function R(x, y, z) {
+    var dy = y - PIV, c = Math.cos(th), s = Math.sin(th);
+    return P(x * c - dy * s, PIV + x * s + dy * c, z);
+  }
+  function f(n) { return n.toFixed(1); }
+  function pts(a) { return a.map(function (p) { return f(p[0]) + "," + f(p[1]); }).join(" "); }
+  function poly(a, fill) {
+    return '<polygon points="' + pts(a) + '" fill="' + fill + '" stroke="#39424e" stroke-width="1.5" stroke-linejoin="round"/>';
+  }
+  function line(a, color, w, extra) {
+    return '<polyline points="' + pts(a) + '" fill="none" stroke="' + color + '" stroke-width="' + w +
+      '" stroke-linecap="round" stroke-linejoin="round" ' + (extra || "") + '/>';
+  }
+  function arrow(a, b, color, w) {
+    var dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+    var h = w * 2.8, hw = w * 1.7, bx = b[0] - ux * h, by = b[1] - uy * h;
+    var head = [b, [bx - uy * hw, by + ux * hw], [bx + uy * hw, by - ux * hw]];
+    return line([a, [bx, by]], color, w, 'stroke-linecap="butt"') +
+      '<polygon points="' + pts(head) + '" fill="' + color + '"/>';
+  }
+  function text(p, s, color, size, anchor) {
+    return '<text x="' + f(p[0]) + '" y="' + f(p[1]) + '" fill="' + color + '" font-size="' + size +
+      '" text-anchor="' + (anchor || "middle") + '">' + s + '</text>';
+  }
+  function wire(a, w) {
+    // 빨간 전류 화살표가 잘 보이도록 밝고 연한 구리색
+    return line(a, "#a8713a", w + 3) + line(a, "#f5d5a8", w) + line(a, "#fdeed8", w * 0.3);
+  }
+
+  var CUR = "#e03131", FLD = "#1670bf", FRC = "#2b9a3f";
+  var POLE = {
+    N: { front: "#e4604f", top: "#f29a8d", side: "#c2483a" },
+    S: { front: "#3f86d8", top: "#86b6ec", side: "#2c66b0" }
+  };
+
+  function magnet() {
+    // U자 모양: 둥글게 굽은 부분(회색) + 곧은 두 팔(극의 색)
+    var xc = -1.2, x1 = 0.6, ro = 1.5, ri = 0.9, zf = 0.8, zb = -0.8;
+    var t = POLE[fld > 0 ? "S" : "N"], b = POLE[fld > 0 ? "N" : "S"];
+    var g = "";
+    function arc(r, a0, a1, z) {
+      var out = [], n = 28, i, a;
+      for (i = 0; i <= n; i++) {
+        a = (a0 + (a1 - a0) * i / n) * Math.PI / 180;
+        out.push(P(xc + r * Math.cos(a), r * Math.sin(a), z));
+      }
+      return out;
+    }
+    // 굽은 부분의 안쪽 면(보이는 쪽만)
+    g += poly(arc(ri, 124, 270, zb).concat(arc(ri, 270, 124, zf)), "#8e96a1");
+    // 아래 팔의 윗면
+    g += poly([P(xc, -ri, zb), P(x1, -ri, zb), P(x1, -ri, zf), P(xc, -ri, zf)], b.top);
+    // 극의 끝 면
+    g += poly([P(x1, -ro, zf), P(x1, -ri, zf), P(x1, -ri, zb), P(x1, -ro, zb)], b.side);
+    g += poly([P(x1, ri, zf), P(x1, ro, zf), P(x1, ro, zb), P(x1, ri, zb)], t.side);
+    // 굽은 부분의 바깥 면과 위 팔의 윗면
+    g += poly(arc(ro, 90, 124, zb).concat(arc(ro, 124, 90, zf)), "#dfe3e8");
+    g += poly([P(xc, ro, zb), P(x1, ro, zb), P(x1, ro, zf), P(xc, ro, zf)], t.top);
+    // 앞면
+    g += poly(arc(ro, 90, 270, zf).concat(arc(ri, 270, 90, zf)), "#b9bfc7");
+    g += line(arc((ro + ri) / 2 + 0.12, 110, 250, zf), "#d3d8de", 5);
+    g += poly([P(xc, ro, zf), P(x1, ro, zf), P(x1, ri, zf), P(xc, ri, zf)], t.front);
+    g += poly([P(xc, -ri, zf), P(x1, -ri, zf), P(x1, -ro, zf), P(xc, -ro, zf)], b.front);
+    // 극 글자는 코일의 앞쪽 변에 가려지지 않게 극의 끝 면에 둔다
+    var pt = P(x1, 1.2, 0), pb = P(x1, -1.2, 0);
+    g += '<text x="' + f(pt[0]) + '" y="' + f(pt[1] + 13) + '" fill="#fff" font-size="34" text-anchor="middle" style="stroke:none">' + (fld > 0 ? "S" : "N") + '</text>';
+    g += '<text x="' + f(pb[0]) + '" y="' + f(pb[1] + 13) + '" fill="#fff" font-size="34" text-anchor="middle" style="stroke:none">' + (fld > 0 ? "N" : "S") + '</text>';
+    return g;
+  }
+
+  function draw() {
+    var s = "";
+    var zc = 1.1, top = 2.9, zl = 0.5;
+
+    // 받침대
+    var base = P(0, -1.5, -2.2);
+    s += '<ellipse cx="' + f(P(-1, -1.5, 0)[0]) + '" cy="' + f(P(-1, -1.5, 0)[1] + 6) + '" rx="300" ry="62" fill="#e3e9ef"/>';
+    s += '<ellipse cx="' + f(base[0]) + '" cy="' + f(base[1]) + '" rx="46" ry="15" fill="#c9a777" stroke="#6b4f2a" stroke-width="1.5"/>';
+    s += line([base, P(0, PIV, -2.2)], "#6b4f2a", 13) + line([base, P(0, PIV, -2.2)], "#dcbf93", 9);
+
+    // 코일의 뒤쪽 변(자석 뒤로 지나감)
+    s += wire([R(0, 0, -zc), R(0, top, -zc)], 16);
+
+    s += magnet();
+
+    // 자기장: N극 → S극
+    var fa = P(0, fld > 0 ? -0.8 : 0.5, 0), fb = P(0, fld > 0 ? 0.5 : -0.8, 0);
+    s += arrow(fa, fb, FLD, 6);
+    // 이름표는 화살표 바로 왼쪽, 코일이 지나가지 않는 높이에 둔다
+    var fl = P(0, -0.72, 0);
+    s += text([fl[0] - 13, fl[1]], "자기장", FLD, 25, "end");
+
+    // 코일의 나머지 변과 도선
+    s += wire([P(0, PIV, zl), R(0, top, zl)], 10);
+    s += wire([P(0, PIV, -zl), R(0, top, -zl)], 10);
+    s += wire([R(0, top, -zc), R(0, top, zc), R(0, 0, zc), R(0, 0, -zc)], 16);
+
+    // 나무 가로대(전기가 통하지 않음)
+    s += line([P(0, PIV, -2.2), P(0, PIV, 1.2)], "#6b4f2a", 12) + line([P(0, PIV, -2.2), P(0, PIV, 1.2)], "#dcbf93", 8);
+
+    // 전원 장치 (스위치 자리를 내려고 오른쪽으로 110 옮겨 그린다)
+    s += '<g transform="translate(110,0)">';
+    s += '<polygon points="650,500 840,500 876,476 686,476" fill="#6c7683" stroke="#232a32" stroke-width="1.5" stroke-linejoin="round"/>';
+    s += '<polygon points="840,500 876,476 876,576 840,600" fill="#343c46" stroke="#232a32" stroke-width="1.5" stroke-linejoin="round"/>';
+    s += '<rect x="650" y="500" width="190" height="100" fill="#495360" stroke="#232a32" stroke-width="1.5"/>';
+    s += '<text x="745" y="582" fill="#fff" font-size="23" text-anchor="middle" style="stroke:none">전원 장치</text>';
+    // 전류의 방향을 바꾸면 전선은 그대로 두고 전원 장치의 (+)·(−) 단자가 서로 바뀐다(전선이 꼬이지 않게)
+    var cP = { body: "#d6336c", cap: "#f06595", txt: "#ffb3b3", sym: "(+)" };
+    var cM = { body: "#212529", cap: "#495057", txt: "#fff", sym: "(−)" };
+    var tL = cur > 0 ? cP : cM, tR = cur > 0 ? cM : cP;
+    s += '<text x="715" y="540" fill="' + tL.txt + '" font-size="24" text-anchor="middle" style="stroke:none">' + tL.sym + '</text>';
+    s += '<text x="800" y="540" fill="' + tR.txt + '" font-size="24" text-anchor="middle" style="stroke:none">' + tR.sym + '</text>';
+    s += '<circle cx="822" cy="574" r="8" fill="' + (on ? "#ffd43b" : "#7b8794") + '" stroke="#232a32" stroke-width="1.5"/>';
+    var TP = [825, 472], TM = [910, 472];
+    s += '<rect x="707" y="472" width="16" height="17" fill="' + tL.body + '" stroke="#232a32" stroke-width="1.5"/><ellipse cx="715" cy="472" rx="8" ry="4" fill="' + tL.cap + '" stroke="#232a32" stroke-width="1.5"/>';
+    s += '<rect x="792" y="472" width="16" height="17" fill="' + tR.body + '" stroke="#232a32" stroke-width="1.5"/><ellipse cx="800" cy="472" rx="8" ry="4" fill="' + tR.cap + '" stroke="#232a32" stroke-width="1.5"/>';
+
+    s += '</g>';
+
+    // 스위치(칼 스위치): 앞쪽 도선과 전원 장치의 왼쪽 단자 사이에 있다
+    var K1 = [640, 556], K2 = [712, 556];
+    s += '<polygon points="622,568 734,568 746,548 634,548" fill="#e9dcc3" stroke="#6b4f2a" stroke-width="1.5" stroke-linejoin="round"/>';
+    s += '<polygon points="622,568 734,568 734,578 622,578" fill="#c9b48e" stroke="#6b4f2a" stroke-width="1.5" stroke-linejoin="round"/>';
+    s += '<text x="680" y="606" fill="#1f2933" font-size="22" text-anchor="middle">스위치</text>';
+    var KE = on ? K2 : [K1[0] + 60, K1[1] - 44];
+    s += '<circle cx="' + K2[0] + '" cy="' + K2[1] + '" r="7" fill="#adb5bd" stroke="#39424e" stroke-width="1.5"/>';
+    s += line([K1, KE], "#39424e", 9) + line([K1, KE], "#ced4da", 5);
+    s += '<circle cx="' + K1[0] + '" cy="' + K1[1] + '" r="7" fill="#adb5bd" stroke="#39424e" stroke-width="1.5"/>';
+    s += '<circle cx="' + f(KE[0]) + '" cy="' + f(KE[1]) + '" r="6" fill="#212529"/>';
+
+    // 전원 장치와 코일을 잇는 전선: 앞쪽 도선 → 스위치 → 왼쪽 단자, 뒤쪽 도선 → 오른쪽 단자
+    var tf = P(0, PIV, zl), tb = P(0, PIV, -zl);
+    function lead(S, c1, c2, T, sign, showArrow) {
+      // (+) 단자에서 나온 전선은 빨간색, (−) 단자 쪽은 검은색
+      var wc = sign < 0 ? "#c92a2a" : "#39424e";
+      var d = "M" + f(S[0]) + " " + f(S[1]) + " C" + f(c1[0]) + " " + f(c1[1]) + " " + f(c2[0]) + " " + f(c2[1]) + " " + f(T[0]) + " " + f(T[1]);
+      var o = '<path d="' + d + '" fill="none" stroke="#fff" stroke-width="8"/><path d="' + d + '" fill="none" stroke="' + wc + '" stroke-width="4.5" stroke-linecap="round"/>';
+      o += '<circle cx="' + f(S[0]) + '" cy="' + f(S[1]) + '" r="6" fill="' + wc + '"/>';
+      if (on && showArrow) {
+        var u = 0.55, v = 1 - u;
+        var px = v * v * v * S[0] + 3 * v * v * u * c1[0] + 3 * v * u * u * c2[0] + u * u * u * T[0];
+        var py = v * v * v * S[1] + 3 * v * v * u * c1[1] + 3 * v * u * u * c2[1] + u * u * u * T[1];
+        var tx = 3 * v * v * (c1[0] - S[0]) + 6 * v * u * (c2[0] - c1[0]) + 3 * u * u * (T[0] - c2[0]);
+        var ty = 3 * v * v * (c1[1] - S[1]) + 6 * v * u * (c2[1] - c1[1]) + 3 * u * u * (T[1] - c2[1]);
+        var L = Math.hypot(tx, ty) / (sign * 26); tx /= L; ty /= L;
+        o += arrow([px - tx, py - ty], [px + tx, py + ty], CUR, 5);
+      }
+      return o;
+    }
+    // (+) 단자에서 나온 전류가 코일을 지나 (−) 단자로 들어간다
+    // 전선 위에는 전류 화살표를 그리지 않는다(선생님 요청)
+    s += lead(tb, [tb[0] + 140, tb[1] - 45], [TM[0], TM[1] - 350], TM, cur, false);
+    s += lead(tf, [tf[0] + 130, tf[1] - 5], [K1[0], K1[1] - 270], K1, -cur, false);
+    s += lead(K2, [K2[0] + 6, K2[1] - 90], [TP[0], TP[1] - 110], TP, -cur, false);
+
+    if (on) {
+      // 전류: (+) 단자 → 코일 → (−) 단자
+      var AW = 3.5;
+      // 사각형 코일 위의 화살표 셋은 화면에서 길이(약 46)와 굵기가 같다.
+      // 아래 변은 비스듬히 보여 짧아지므로 그만큼 길게 잡는다.
+      var CW = 4.5;
+      var a1 = R(0, 0, -0.1), a2 = R(0, 0, -1.02);
+      var b1 = R(0, 2.5, zc), b2 = R(0, 2.0, zc);
+      var c1 = R(0, 2.0, -zc), c2 = R(0, 2.5, -zc);
+      // 가로대에서 사각형 코일로 내려가는 두 도선
+      // 앞쪽 전선이 뒤쪽 도선 앞을 지나가는 곳보다 아래에 둔다(겹치지 않게)
+      var d1 = R(0, 3.43, zl), d2 = R(0, 3.03, zl);
+      var e1 = R(0, 3.03, -zl), e2 = R(0, 3.43, -zl);
+      if (cur > 0) { s += arrow(a1, a2, CUR, CW) + arrow(b1, b2, CUR, CW) + arrow(c1, c2, CUR, CW) + arrow(d1, d2, CUR, AW) + arrow(e1, e2, CUR, AW); }
+      else         { s += arrow(a2, a1, CUR, CW) + arrow(b2, b1, CUR, CW) + arrow(c2, c1, CUR, CW) + arrow(d2, d1, CUR, AW) + arrow(e2, e1, CUR, AW); }
+      var cl = R(0, 0, -zc);
+      // 안쪽으로 기울었을 때는 자기장 화살표와 겹치지 않게 왼쪽 위에 둔다
+      if (th < 0) s += text([cl[0] - 14, cl[1] - 12], "전류", CUR, 26, "end");
+      else        s += text([cl[0] + 16, cl[1] + 2], "전류", CUR, 26, "start");
+
+      // 힘
+      var dir = cur * fld, c0 = R(0, 0, 0);
+      var tip = [c0[0] + dir * 1.15 * U, c0[1]];
+      s += arrow(c0, tip, FRC, 9);
+      s += text([tip[0] + dir * 12, tip[1] + 9], "힘", FRC, 28, dir > 0 ? "start" : "end");
+    }
+
+    document.getElementById("scene").innerHTML = s;
+  }
+
+  // ---- 움직임: 힘을 받는 쪽으로 기울어져 멈춘다 ----
+  var raf = 0, last = 0;
+  function step(t) {
+    var dt = Math.min(0.033, (t - last) / 1000 || 0.016);
+    last = t;
+    var target = on ? cur * fld * MAXTH : 0;
+    vel += (-26 * (th - target) - 3.2 * vel) * dt;
+    th += vel * dt;
+    if (Math.abs(th - target) < 0.0004 && Math.abs(vel) < 0.002) { th = target; vel = 0; raf = 0; draw(); return; }
+    draw();
+    raf = requestAnimationFrame(step);
+  }
+  function kick() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(step); } }
+
+  function update() {
+    var sw = document.getElementById("sw");
+    sw.setAttribute("aria-pressed", on ? "true" : "false");
+    sw.textContent = on ? "스위치 열기 (전류 끊기)" : "스위치 닫기 (전류 흐르게 하기)";
+    var r = document.getElementById("result");
+    if (!on) {
+      r.innerHTML = "코일에 전류가 흐르지 않는다. 코일은 움직이지 않는다.";
+    } else {
+      r.innerHTML = "코일은 말굽자석 <b>" + (cur * fld > 0 ? "바깥쪽" : "안쪽") + "</b>으로 힘을 받아 움직인다.";
+    }
+    document.getElementById("state").textContent =
+      "전류의 방향: " + (cur > 0 ? "처음 방향" : "반대 방향") + " / 자기장의 방향: " + (fld > 0 ? "처음 방향" : "반대 방향");
+    draw();
+    kick();
+  }
+
+  function seg(id, set) {
+    var box = document.getElementById(id);
+    box.addEventListener("click", function (e) {
+      var b = e.target.closest("button");
+      if (!b) return;
+      Array.prototype.forEach.call(box.querySelectorAll("button"), function (x) {
+        x.setAttribute("aria-pressed", x === b ? "true" : "false");
+      });
+      set(Number(b.dataset.v));
+      update();
+    });
+  }
+  seg("curSeg", function (v) { cur = v; });
+  seg("fldSeg", function (v) { fld = v; });
+  document.getElementById("sw").addEventListener("click", function () { on = !on; update(); });
+
+  update();
+})();
+</script>
+</body>
+</html>
