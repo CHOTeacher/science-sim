@@ -1,0 +1,1091 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>우리은하 시뮬레이션</title>
+<style>
+  :root {
+    --bg: #000;
+    --panel: rgba(12, 16, 32, 0.78);
+    --text: #fff;
+    --muted: #c9d2e8;
+    --btn: #1d2745;
+    --btn-border: #56648f;
+    --btn-active: #ffd54a;
+    --font: "Malgun Gothic", "맑은 고딕", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow: hidden; }
+  #sky { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; }
+  #sky.dragging { cursor: grabbing; }
+
+  #caption {
+    position: fixed; left: 16px; top: 16px; max-width: calc(100% - 32px);
+    background: var(--panel); border-radius: 14px; padding: 12px 18px; pointer-events: none;
+  }
+  #caption h1 { margin: 0; font-size: 28px; line-height: 1.3; }
+  #caption p { margin: 4px 0 0; font-size: 20px; color: var(--muted); }
+
+  #minimap {
+    position: fixed; right: 16px; top: 16px; width: 200px; height: 200px;
+    background: var(--panel); border-radius: 14px; display: none; pointer-events: none;
+  }
+  #minimap-label {
+    position: fixed; right: 16px; top: 222px; width: 200px; text-align: center;
+    font-size: 18px; color: var(--muted); display: none; pointer-events: none;
+  }
+
+  #controls {
+    position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px 16px;
+    display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+    background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0));
+  }
+  #controls button {
+    font-family: var(--font); font-size: 24px; font-weight: 700; color: var(--text);
+    background: var(--btn); border: 3px solid var(--btn-border); border-radius: 14px;
+    min-height: 68px; padding: 8px 22px; cursor: pointer; touch-action: manipulation;
+  }
+  #controls button:active { transform: translateY(1px); }
+  #controls button.active { border-color: var(--btn-active); background: #3a3313; }
+  #controls button.active::before { content: "▶ "; color: var(--btn-active); }
+  #controls button.cluster { background: #2a1f3d; border-color: #8a6fb8; }
+  #controls button.cluster.active { border-color: var(--btn-active); background: #3a3313; }
+  #controls .sep { width: 12px; }
+  #labelBtn { background: #26344f; }
+  #labelBtn[aria-pressed="true"] { border-color: #7fd3ff; background: #12344a; }
+
+  @media (max-width: 900px) {
+    #controls button { font-size: 18px; min-height: 52px; padding: 6px 12px; }
+    #caption h1 { font-size: 20px; }
+    #caption p { font-size: 15px; }
+    #minimap, #minimap-label { width: 130px; }
+    #minimap { height: 130px; }
+    #minimap-label { top: 150px; font-size: 14px; }
+    #controls .sep { display: none; }
+  }
+</style>
+</head>
+<body>
+<canvas id="sky"></canvas>
+<div id="caption"><h1 id="capTitle">불러오는 중…</h1><p id="capHint">이 문구가 계속 보이면 파일을 더블클릭해서 크롬이나 엣지로 열어 주세요</p></div>
+<canvas id="minimap" width="200" height="200"></canvas>
+<div id="minimap-label">지금 바라보는 방향</div>
+<div id="controls">
+  <button data-view="top">위에서 보기</button>
+  <button data-view="side">옆에서 보기</button>
+  <button data-view="center">태양계에서 은하 중심 방향</button>
+  <button data-view="out">태양계에서 은하 바깥 방향</button>
+  <span class="sep"></span>
+  <button data-view="gc" class="cluster">구상 성단 확대</button>
+  <button data-view="oc" class="cluster">산개 성단 확대</button>
+  <button data-view="neb" class="cluster">성운 확대</button>
+  <span class="sep"></span>
+  <button id="labelBtn" aria-pressed="false">이름표 켜기</button>
+</div>
+
+<noscript><div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-size:24px;padding:16px;text-align:center;background:#000;color:#fff">이 창에서는 시뮬레이션이 실행되지 않아요.<br>파일을 더블클릭해서 크롬이나 엣지로 열어 주세요.</div></noscript>
+<script>
+  // 오류가 나면 화면 위쪽에 내용을 보여 준다 (원인 찾기용)
+  window.addEventListener("error", e => {
+    const t = document.getElementById("capTitle"), h = document.getElementById("capHint");
+    if (t) t.textContent = "오류가 났어요. 이 문구를 알려 주세요.";
+    if (h) h.textContent = (e.message || "알 수 없는 오류") + " (줄 " + (e.lineno || "?") + ")";
+  });
+</script>
+<script>
+(() => {
+  "use strict";
+  // ---------- 모형 설정 (단위: kpc = 1000 pc) ----------
+  // 천재교과서 291쪽: 지름 약 30000 pc, 태양계는 중심에서 약 8500 pc 떨어진 나선팔
+  const R_MAX = 15;          // 반지름 15 kpc → 지름 30000 pc
+  const SUN_R = 8.5;         // 8500 pc
+  const BAR_ANGLE = 25 * Math.PI / 180;
+  const BAR_HALF = 4.0;
+  const ARM_R0 = 3.6;
+  const PITCH = 13 * Math.PI / 180;
+  const ARM_K = 1 / Math.tan(PITCH);
+  const DEG = Math.PI / 180;
+
+  // 항상 같은 모양이 나오도록 고정된 난수
+  let seed = 20260929;
+  function rand() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+  function gauss() {
+    let u = 0, v = 0;
+    while (u === 0) u = rand();
+    v = rand();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  // ---------- 별 만들기 ----------
+  const COUNTS = { bulge: 14000, bar: 10000, arms: 40000, disk: 22000 };
+  // 성단 (천재교과서 291쪽): 구상 성단 = 수만~수십만 개 별이 촘촘한 공 모양, 붉은색 저온의 별이 많음
+  //                          산개 성단 = 수십~수만 개 별이 엉성하게 모임, 파란색 고온의 별이 많음
+  // 모형이라 별 수는 줄이고 크기는 잘 보이게 키웠다.
+  const GC_N = 26, GC_STARS = 1200;  // 구상 성단: 중심부를 둘러싼 공 모양 공간
+  const OC_N = 40, OC_STARS = 110;   // 산개 성단: 나선팔
+  // 성운 (천재교과서 292쪽): 성간 물질(가스와 티끌)이 모여 구름처럼 보이는 것
+  //   방출 성운 = 별빛을 흡수해 온도가 높아져 스스로 빛을 냄(붉은색), 반사 성운 = 별빛을 반사(푸른색),
+  //   암흑 성운 = 뒤에서 오는 별빛을 가로막아 어둡게 보임
+  // 가스는 점이 아니라 은은한 빛으로만 그린다. 암흑 성운은 뒤쪽 빛을 실제로 가린다.
+  const NE_MAIN_P = 2500, RN_MAIN_P = 900, SC_P = 1200, NE_N = 12, NE_P = 150, RN_N = 4, RN_P = 120;
+  const NEB_COUNT = NE_MAIN_P + RN_MAIN_P + 150 + 4 + 6 + SC_P + NE_N * (NE_P + 2) + RN_N * (RN_P + 1);
+  const N = COUNTS.bulge + COUNTS.bar + COUNTS.arms + COUNTS.disk + GC_N * GC_STARS + OC_N * OC_STARS + NEB_COUNT;
+  const X = new Float32Array(N), Y = new Float32Array(N), Z = new Float32Array(N);
+  const CR = new Float32Array(N), CG = new Float32Array(N), CB = new Float32Array(N);
+  const L = new Float32Array(N);
+  // 0 = 일반 별, 1 = 성단 별 (확대했을 때 더 밝게), 2 = 성운 가스 (은은한 빛으로만),
+  // 3 = 구상 성단 별 (1과 같지만 멀리서는 번지는 빛 없이 점으로만 → 성운과 모양으로 구분)
+  const T = new Uint8Array(N);
+  let n = 0;
+
+  function lum() { return 0.35 + Math.pow(rand(), 10) * 6; }
+  function put(x, y, z, r, g, b, l) {
+    X[n] = x; Y[n] = y; Z[n] = z; CR[n] = r; CG[n] = g; CB[n] = b; L[n] = l; n++;
+  }
+  function warm() { const t = rand() * 0.15; return [1.0, 0.82 + t, 0.55 + t]; }
+  function cool() {
+    const t = rand();
+    if (t < 0.06) return [1.0, 0.55, 0.65];      // 붉은 가스 빛
+    if (t < 0.55) return [0.62, 0.75, 1.0];      // 푸른 별
+    return [0.95, 0.95, 1.0];
+  }
+  function white() { const t = rand() * 0.1; return [1.0, 0.93 + t * 0.5, 0.82 + t]; }
+
+  // 모든 별은 반지름 15 kpc(지름 30000 pc) 안에만 둔다
+  function inside(x, z) { return x * x + z * z <= R_MAX * R_MAX; }
+
+  // 중심부(볼록한 부분) — 조금 더 밝게
+  for (let i = 0; i < COUNTS.bulge; i++) {
+    const c = warm();
+    put(gauss() * 1.1, gauss() * 0.75, gauss() * 1.1, c[0], c[1], c[2], lum() * 1.6);
+  }
+  // 막대 구조
+  const bc = Math.cos(BAR_ANGLE), bs = Math.sin(BAR_ANGLE);
+  for (let i = 0; i < COUNTS.bar; i++) {
+    const a = (rand() * 2 - 1) * BAR_HALF * (0.6 + 0.4 * rand());
+    const b = gauss() * 0.5;
+    const c = warm();
+    put(a * bc - b * bs, gauss() * 0.3, a * bs + b * bc, c[0], c[1], c[2], lum() * 1.3);
+  }
+  // 나선팔 4개 (막대 끝에서 시작)
+  function armPoint(k, r) {
+    const th = BAR_ANGLE + k * Math.PI / 2 + Math.log(r / ARM_R0) * ARM_K;
+    return [r * Math.cos(th), r * Math.sin(th), th];
+  }
+  // 바깥쪽까지 별이 고르게 있도록 완만하게 줄어드는 분포 (가장자리가 보이게)
+  function radius(r0, scale) {
+    const span = R_MAX - r0;
+    return r0 - scale * Math.log(1 - rand() * (1 - Math.exp(-span / scale)));
+  }
+  for (let i = 0; i < COUNTS.arms; i++) {
+    const k = i % 4;
+    let x, z;
+    do {
+      const r = radius(ARM_R0, 7);
+      const p = armPoint(k, r);
+      const w = 0.35 + 0.03 * r;
+      x = p[0] + gauss() * w; z = p[1] + gauss() * w;
+    } while (!inside(x, z));
+    const c = cool();
+    put(x, gauss() * 0.13, z, c[0], c[1], c[2], lum());
+  }
+  // 원반 전체에 퍼진 별
+  for (let i = 0; i < COUNTS.disk; i++) {
+    const r = radius(0, 6);
+    const th = rand() * Math.PI * 2;
+    const c = white();
+    put(r * Math.cos(th), gauss() * 0.2, r * Math.sin(th), c[0], c[1], c[2], lum() * 0.8);
+  }
+
+  // 태양계: 나선팔 위, 중심에서 8.5 kpc
+  const sp = armPoint(1, SUN_R);
+  const SUN = [sp[0], 0, sp[1]];
+  const sLen = Math.hypot(SUN[0], SUN[2]);
+  const SU = [SUN[0] / sLen, 0, SUN[2] / sLen];     // 중심 → 태양계 방향
+  const NV = [SU[2], 0, -SU[0]];                    // 원반 안에서 그와 수직인 방향
+
+  // ---------- 성단 ----------
+  // 위치 표시(이름표 켜기)용 중심 목록
+  const GCS = [], OCS = [], NBS = [];
+  function addGlobular(cx, cy, cz) {
+    GCS.push([cx, cy, cz]);
+    const a = 0.012;                                 // 촘촘한 공 모양 (플러머 분포, 실제 크기에 가깝게 수십 pc)
+    for (let i = 0; i < GC_STARS; i++) {
+      let r = a / Math.sqrt(Math.pow(1 - rand() * 0.995, -2 / 3) - 1);
+      if (r > 0.08) r = 0.08 * rand();
+      const u = rand() * 2 - 1, ph = rand() * Math.PI * 2, q = Math.sqrt(1 - u * u);
+      const t = rand();
+      const c = t < 0.85 ? [1.0, 0.34 + rand() * 0.16, 0.16 + rand() * 0.1]    // 붉은색 별이 많음
+                         : [1.0, 0.8, 0.6];
+      T[n] = 3;                                      // 구상 성단 별: 멀리서는 번지지 않는 또렷한 점으로 (성운과 구분)
+      put(cx + r * q * Math.cos(ph), cy + r * u, cz + r * q * Math.sin(ph), c[0], c[1], c[2], lum() * 0.28);
+    }
+  }
+  function addOpen(cx, cy, cz) {
+    OCS.push([cx, cy, cz]);
+    const s = 0.012;                                 // 엉성하게 모임 (실제 크기에 가깝게 수~수십 pc)
+    for (let i = 0; i < OC_STARS; i++) {
+      const t = rand();
+      const c = t < 0.85 ? [0.1 + rand() * 0.08, 0.32 + rand() * 0.1, 1.0]    // 파란색 별이 많음 (진하게)
+                         : [0.75, 0.85, 1.0];
+      T[n] = 1;
+      put(cx + gauss() * s, cy + gauss() * s * 0.7, cz + gauss() * s, c[0], c[1], c[2], lum() * 1.6);
+    }
+  }
+  // 확대 버튼으로 찾아가는 대표 성단 2개
+  const gcAng = Math.atan2(SUN[2], SUN[0]) + 110 * DEG;
+  const GC_MAIN = [Math.cos(gcAng) * 3.8, 3.0, Math.sin(gcAng) * 3.8];
+  const ocArm = armPoint(3, 10.5);
+  const OC_MAIN = [ocArm[0], 0.05, ocArm[1]];
+  addGlobular(GC_MAIN[0], GC_MAIN[1], GC_MAIN[2]);
+  addOpen(OC_MAIN[0], OC_MAIN[1], OC_MAIN[2]);
+  // 나머지 구상 성단: 중심부를 둘러싼 공 모양 공간 (헤일로)
+  // - 중심 쪽으로 갈수록 많다: 공간 밀도 ∝ r^-3.5 → 반지름 분포 ∝ r^-1.5
+  // - 중심부(팽대부, 중심에서 3 kpc 안쪽)에도 구상 성단이 많고, 이들은 원반 쪽으로 조금 납작하게 모인다
+  //   (Harris: 옆에서 본 분포는 대체로 구형이지만 중심부는 예외)
+  // - 나선팔 쪽 얇은 원반 안(높이 0.3 kpc 이내)에는 두지 않는다
+  // 참고: Harris, Globular Cluster Systems (NED); Cudworth, Galactic Structure (NED)
+  // 수업용 단순화: 실제로는 40 kpc 밖에도 있지만, 중심에 모인 모습이 잘 보이도록 8 kpc 안에만 둔다
+  const GR0 = Math.pow(0.5, -0.5), GR1 = Math.pow(8, -0.5);
+  for (let i = 1; i < GC_N; i++) {
+    let x, y, z;
+    do {
+      const r = Math.pow(GR0 - rand() * (GR0 - GR1), -2);
+      const u = rand() * 2 - 1, ph = rand() * Math.PI * 2, q = Math.sqrt(1 - u * u);
+      x = r * q * Math.cos(ph); y = r * u; z = r * q * Math.sin(ph);
+      if (r < 3) y *= 0.5;                           // 중심부 구상 성단은 납작하게
+    } while ((Math.abs(y) < 0.3 && Math.hypot(x, z) > 2.5) || !inside(x, z));
+    addGlobular(x, y, z);
+  }
+  // 나머지 산개 성단: 나선팔 위
+  for (let i = 1; i < OC_N; i++) {
+    const p = armPoint(i % 4, 5 + rand() * 9);
+    const x = p[0] + gauss() * 0.3, z = p[1] + gauss() * 0.3;
+    if (!inside(x, z)) { i--; continue; }
+    addOpen(x, gauss() * 0.05, z);
+  }
+
+  // ---------- 성운 ----------
+  function addGas(cx, cy, cz, s, count, col, l) {
+    if (s > 0.01) NBS.push([cx, cy, cz]);            // 빛무리(아주 작은 것)는 성운 목록에서 뺀다
+    for (let i = 0; i < count; i++) {
+      T[n] = 2;
+      const k = 0.85 + rand() * 0.3;
+      put(cx + gauss() * s, cy + gauss() * s * 0.8, cz + gauss() * s, col[0] * k, col[1] * k, col[2] * k, l);
+    }
+  }
+  const EMIT = [1.0, 0.25, 0.5], REFL = [0.35, 0.55, 1.0];   // 방출 성운은 분홍빛 붉은색 (구상 성단의 주황색과 구분)
+  const DN = [];                      // 암흑 성운: 뒤쪽 빛을 가리는 구름 {x, y, z, r2}
+  function addDark(x, y, z, r) { DN.push({ x, y, z, r2: r * r }); }
+
+  // 대표 성운 지역 (확대 버튼으로 찾아감): 화면 왼쪽부터 반사 성운 · 방출 성운 · 암흑 성운(별 무리 앞)
+  const neArm = armPoint(0, 9.2);
+  const NEB_MAIN = [neArm[0], 0.03, neArm[1]];
+  const nebCamV = [NEB_MAIN[0] * -0.12, 0.6, NEB_MAIN[2] * -0.12];
+  const ncl = Math.hypot(nebCamV[0], nebCamV[1], nebCamV[2]);
+  const NCD = [nebCamV[0] / ncl, nebCamV[1] / ncl, nebCamV[2] / ncl];          // 성운 → 카메라 방향
+  let SIDE = [NCD[2], 0, -NCD[0]];                                               // 화면 가로 방향
+  const sl = Math.hypot(SIDE[0], SIDE[2]); SIDE = [SIDE[0] / sl, 0, SIDE[2] / sl];
+  addGas(NEB_MAIN[0], NEB_MAIN[1], NEB_MAIN[2], 0.03, NE_MAIN_P, EMIT, 0.5);
+  for (let i = 0; i < 6; i++) {       // 방출 성운을 빛나게 하는 뜨거운 파란 별
+    T[n] = 1;
+    put(NEB_MAIN[0] + gauss() * 0.008, NEB_MAIN[1] + gauss() * 0.008, NEB_MAIN[2] + gauss() * 0.008, 0.55, 0.7, 1.0, 3);
+  }
+  const RN_MAIN = [NEB_MAIN[0] - SIDE[0] * 0.075, NEB_MAIN[1] + 0.015, NEB_MAIN[2] - SIDE[2] * 0.075];
+  // 반사 성운: 가운데의 밝은 별빛을 둘레의 가스가 반사한다 → 별이 확대해도 또렷하게 보이도록 성단 별처럼 강조(T=1)
+  T[n] = 1; put(RN_MAIN[0], RN_MAIN[1], RN_MAIN[2], 0.9, 0.95, 1.0, 12);         // 반사 성운을 비추는 밝은 별
+  for (let i = 0; i < 3; i++) {
+    T[n] = 1; put(RN_MAIN[0] + gauss() * 0.006, RN_MAIN[1] + gauss() * 0.006, RN_MAIN[2] + gauss() * 0.006, 0.8, 0.88, 1.0, 3);
+  }
+  addGas(RN_MAIN[0], RN_MAIN[1], RN_MAIN[2], 0.004, 150, [1.0, 1.0, 1.0], 1.2);   // 밝은 별의 빛무리
+  addGas(RN_MAIN[0], RN_MAIN[1], RN_MAIN[2], 0.016, RN_MAIN_P, REFL, 0.45);
+  // 암흑 성운: 별이 빽빽한 별 무리 바로 앞(카메라 쪽) → 뒤에서 오는 별빛을 가려 가운데가 검게 뚫려 보인다
+  // 별 무리 중심(SCC)과 [성운 확대] 카메라 위치를 잇는 선 위에 암흑 성운을 놓아야 화면에서 별 무리 한가운데를 가린다
+  const NEB_TGT = [NEB_MAIN[0] + SIDE[0] * 0.005, NEB_MAIN[1], NEB_MAIN[2] + SIDE[2] * 0.005], NEB_DIST = 0.26;
+  const NEB_CAMPOS = [NEB_TGT[0] + NCD[0] * NEB_DIST, NEB_TGT[1] + NCD[1] * NEB_DIST, NEB_TGT[2] + NCD[2] * NEB_DIST];
+  const SCC = [NEB_MAIN[0] + SIDE[0] * 0.09 - NCD[0] * 0.05, NEB_MAIN[1] - NCD[1] * 0.05, NEB_MAIN[2] + SIDE[2] * 0.09 - NCD[2] * 0.05];
+  const DN_MAIN = [0, 1, 2].map(k => SCC[k] + (NEB_CAMPOS[k] - SCC[k]) * 0.3);
+  addDark(DN_MAIN[0], DN_MAIN[1], DN_MAIN[2], 0.016);
+  for (let i = 0; i < SC_P; i++) {    // 암흑 성운 뒤쪽의 별 무리
+    T[n] = 1;
+    const c = rand() < 0.6 ? [1.0, 0.95, 0.85] : [0.85, 0.9, 1.0];
+    put(SCC[0] + gauss() * 0.028, SCC[1] + gauss() * 0.028, SCC[2] + gauss() * 0.028,
+        c[0], c[1], c[2], lum() * 0.3);   // 멀리서는 흐리게, 확대하면 성단 별처럼 밝아짐
+  }
+
+  // 나선팔 곳곳의 작은 성운들
+  for (let i = 0; i < NE_N; i++) {
+    const p = armPoint(i % 4, 4.5 + rand() * 10);
+    const x = p[0] + gauss() * 0.25, z = p[1] + gauss() * 0.25;
+    if (!inside(x, z)) { i--; continue; }
+    addGas(x, gauss() * 0.04, z, 0.02 + rand() * 0.03, NE_P, EMIT, 1.0);
+    for (let j = 0; j < 2; j++) { T[n] = 1; put(x + gauss() * 0.01, gauss() * 0.01, z + gauss() * 0.01, 0.55, 0.7, 1.0, 3); }
+  }
+  for (let i = 0; i < RN_N; i++) {
+    const p = armPoint(i % 4, 5 + rand() * 9);
+    const x = p[0] + gauss() * 0.25, z = p[1] + gauss() * 0.25;
+    if (!inside(x, z)) { i--; continue; }
+    put(x, 0, z, 0.85, 0.9, 1.0, 6);
+    addGas(x, 0, z, 0.015, RN_P, REFL, 1.2);
+  }
+  for (let i = 0; i < 14; i++) {
+    const p = armPoint(i % 4, 5 + rand() * 9);
+    const x = p[0] + gauss() * 0.2, z = p[1] + gauss() * 0.2;
+    if (Math.hypot(x - SUN[0], z - SUN[2]) < 1.5) { i--; continue; }   // 태양계 바로 옆에는 두지 않음
+    addDark(x, gauss() * 0.03, z, 0.03 + rand() * 0.03);
+  }
+
+  // ---------- 화면 ----------
+  const canvas = document.getElementById("sky");
+  const ctx = canvas.getContext("2d");
+  let W = 0, H = 0, img, acc, GW = 0, GH = 0, glow, glowTmp;
+  const GS = 4; // 은은한 빛 버퍼 축소 배율
+
+  function resize() {
+    W = Math.max(1, Math.floor(window.innerWidth));
+    H = Math.max(1, Math.floor(window.innerHeight));
+    canvas.width = W; canvas.height = H;
+    img = ctx.createImageData(W, H);
+    acc = new Float32Array(W * H * 3);
+    GW = Math.ceil(W / GS) + 2; GH = Math.ceil(H / GS) + 2;
+    glow = new Float32Array(GW * GH * 3);
+    glowTmp = new Float32Array(GW * GH * 3);
+    if (!anim && mode === "orbit" && (viewId === "top" || viewId === "side") && isOrigin(orbit.target)) {
+      orbit.dist = fitDist(cam.fov);
+    }
+    applyState();
+    dirty = true;
+  }
+
+  // ---------- 카메라 ----------
+  // shift: 바깥 시점에서 은하를 조금 위로 올려 아래쪽에 지름 표시 자리를 만든다 (1 = 올림, 0 = 가운데)
+  const cam = { pos: [0, 40, 0], yaw: 0, pitch: -89 * DEG, fov: 45 * DEG, expo: 1, shift: 1 };
+  function centerY() { return H / 2 - cam.shift * H * 0.05; }
+  let mode = "orbit";
+  const orbit = { target: [0, 0, 0], yaw: 0, pitch: 89 * DEG, dist: 40, shift: 1 };
+  const look = { yaw: 0, pitch: 0 };
+  const EXPO_OUT = 800, EXPO_IN = 26, REF_DIST = 50;
+  // 가까이 갈수록 별이 너무 밝아지지 않게 거리에 맞춰 밝기를 맞춘다
+  function orbitExpo(dist) { return EXPO_OUT * Math.pow(dist / REF_DIST, 1.4); }
+  // 아주 가까이 확대하면(4 kpc 안쪽) 성단 별만 더 밝게 해서 주변 별과 구분되게 한다
+  function clusterGain() {
+    // 태양계 시점: 실제처럼 은하수 띠보다 두드러지지 않게 어둡게
+    if (mode === "look" && !anim) return 0.05;
+    const d = Math.hypot(cam.pos[0] - orbit.target[0], cam.pos[1] - orbit.target[1], cam.pos[2] - orbit.target[2]);
+    const near = Math.max(0, Math.min(1, (4 - d) / 4));
+    return 1 + 3 * near;
+  }
+  // 성운 가스: 가까이 확대하면 은은한 빛을 더 밝게
+  function gasGain() {
+    if (mode === "look" && !anim) return 0.2;   // 태양계 시점: 은하수 띠보다 두드러지지 않게
+    const d = Math.hypot(cam.pos[0] - orbit.target[0], cam.pos[1] - orbit.target[1], cam.pos[2] - orbit.target[2]);
+    const near = Math.max(0, Math.min(1, (4 - d) / 4));
+    return 0.2 + 15 * near;           // 멀리서(은하 전체)는 희미하게 번지는 구름으로
+  }
+  function isOrigin(p) { return Math.abs(p[0]) + Math.abs(p[1]) + Math.abs(p[2]) < 1e-6; }
+
+  function fitDist(fov) {
+    const aspect = W / H;
+    const t = Math.tan(fov / 2);
+    const need = R_MAX + 5;
+    return need / t / Math.min(1, aspect) * 1.02 + 2;
+  }
+  function dirOf(yaw, pitch) {
+    return [Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch), Math.cos(pitch) * Math.cos(yaw)];
+  }
+  function angOf(v) {
+    const l = Math.hypot(v[0], v[1], v[2]) || 1;
+    return { yaw: Math.atan2(v[0], v[2]), pitch: Math.asin(v[1] / l) };
+  }
+  function applyState() {
+    if (anim) return;
+    if (mode === "orbit") {
+      const d = dirOf(orbit.yaw, orbit.pitch), t = orbit.target;
+      cam.pos = [t[0] + d[0] * orbit.dist, t[1] + d[1] * orbit.dist, t[2] + d[2] * orbit.dist];
+      cam.yaw = orbit.yaw + Math.PI;
+      cam.pitch = -orbit.pitch;
+      cam.expo = orbitExpo(orbit.dist);
+      cam.shift = orbit.shift;
+    } else {
+      cam.pos = SUN.slice();
+      cam.yaw = look.yaw; cam.pitch = look.pitch;
+      cam.shift = 0;
+    }
+  }
+
+  const HINT_OUT = "끌어서 돌리기 · 휠(두 손가락)로 확대 · 두 번 누르면 그곳으로";
+  // 성단을 볼 때 카메라 방향: 은하 중심부의 밝은 빛이 뒤에 오지 않도록
+  const gcCam = angOf([GC_MAIN[0] * -0.35, -0.9, GC_MAIN[2] * -0.35]);
+  const ocCam = angOf([OC_MAIN[0] * -0.12, 0.6, OC_MAIN[2] * -0.12]);
+  const nebCam = angOf(NCD);
+  const views = {
+    top: () => ({
+      mode: "orbit", target: [0, 0, 0], yaw: Math.atan2(-SU[0], -SU[2]) + Math.PI + 35 * DEG, pitch: 89.4 * DEG,
+      fov: 45 * DEG, shift: 1, title: "위에서 본 우리은하", hint: HINT_OUT
+    }),
+    side: () => ({
+      mode: "orbit", target: [0, 0, 0], yaw: Math.atan2(NV[0], NV[2]), pitch: 0.8 * DEG,
+      fov: 45 * DEG, shift: 1, title: "옆에서 본 우리은하", hint: HINT_OUT
+    }),
+    center: () => ({
+      mode: "look", yaw: Math.atan2(-SU[0], -SU[2]), pitch: 0,
+      fov: 62 * DEG, expo: EXPO_IN,
+      title: "태양계에서 우리은하 중심 방향을 본 모습", hint: "화면을 끌어서 둘러보세요"
+    }),
+    out: () => ({
+      mode: "look", yaw: Math.atan2(SU[0], SU[2]), pitch: 0,
+      fov: 62 * DEG, expo: EXPO_IN,
+      title: "태양계에서 우리은하 바깥 방향을 본 모습", hint: "화면을 끌어서 둘러보세요"
+    }),
+    gc: () => ({
+      mode: "orbit", target: GC_MAIN.slice(), yaw: gcCam.yaw, pitch: gcCam.pitch, dist: 0.2,
+      fov: 45 * DEG, shift: 0, title: "구상 성단 확대", hint: HINT_OUT
+    }),
+    oc: () => ({
+      mode: "orbit", target: OC_MAIN.slice(), yaw: ocCam.yaw, pitch: ocCam.pitch, dist: 0.13,
+      fov: 45 * DEG, shift: 0, title: "산개 성단 확대", hint: HINT_OUT
+    }),
+    neb: () => ({
+      mode: "orbit", target: NEB_TGT.slice(),
+      yaw: nebCam.yaw, pitch: nebCam.pitch, dist: NEB_DIST,
+      fov: 45 * DEG, shift: 0, title: "성운 확대", hint: HINT_OUT
+    })
+  };
+
+  let viewId = "top";
+  let anim = null;
+  let tween = null;   // 두 번 눌러 중심을 옮길 때
+
+  function wrapAngle(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
+  function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+  function setView(id, instant) {
+    const v = views[id]();
+    viewId = id;
+    tween = null;
+    document.getElementById("capTitle").textContent = v.title;
+    document.getElementById("capHint").textContent = v.hint;
+    document.querySelectorAll("#controls button[data-view]").forEach(b => {
+      b.classList.toggle("active", b.dataset.view === id);
+      b.setAttribute("aria-pressed", b.dataset.view === id ? "true" : "false");
+    });
+
+    // 목표 카메라 계산
+    let tpos, tyaw, tpitch, texpo, tshift, dist = 0;
+    if (v.mode === "orbit") {
+      dist = v.dist || fitDist(v.fov);
+      const d = dirOf(v.yaw, v.pitch), t = v.target;
+      tpos = [t[0] + d[0] * dist, t[1] + d[1] * dist, t[2] + d[2] * dist];
+      tyaw = v.yaw + Math.PI; tpitch = -v.pitch; texpo = orbitExpo(dist); tshift = v.shift;
+    } else {
+      tpos = SUN.slice(); tyaw = v.yaw; tpitch = v.pitch; texpo = v.expo; tshift = 0;
+    }
+    const finish = () => {
+      mode = v.mode;
+      if (v.mode === "orbit") {
+        orbit.target = v.target.slice(); orbit.yaw = v.yaw; orbit.pitch = v.pitch;
+        orbit.dist = dist; orbit.shift = v.shift;
+      } else { look.yaw = v.yaw; look.pitch = v.pitch; }
+      cam.fov = v.fov;
+      if (v.mode === "look") cam.expo = v.expo;
+      anim = null; applyState(); dirty = true;
+    };
+    if (instant) { finish(); return; }
+    anim = {
+      t0: performance.now(), dur: 1800,
+      from: { pos: cam.pos.slice(), yaw: cam.yaw, pitch: cam.pitch, fov: cam.fov, expo: cam.expo, shift: cam.shift },
+      to: { pos: tpos, yaw: cam.yaw + wrapAngle(tyaw - cam.yaw), pitch: tpitch, fov: v.fov, expo: texpo, shift: tshift },
+      finish
+    };
+  }
+
+  function stepAnim(now) {
+    if (tween) {
+      const t = Math.min(1, (now - tween.t0) / 600), e = ease(t);
+      for (let i = 0; i < 3; i++) orbit.target[i] = tween.from[i] + (tween.to[i] - tween.from[i]) * e;
+      if (t >= 1) tween = null;
+      applyState(); dirty = true;
+    }
+    if (!anim) return;
+    let t = Math.min(1, (now - anim.t0) / anim.dur);
+    const e = ease(t), a = anim.from, b = anim.to;
+    for (let i = 0; i < 3; i++) cam.pos[i] = a.pos[i] + (b.pos[i] - a.pos[i]) * e;
+    cam.yaw = a.yaw + (b.yaw - a.yaw) * e;
+    cam.pitch = a.pitch + (b.pitch - a.pitch) * e;
+    cam.fov = a.fov + (b.fov - a.fov) * e;
+    cam.shift = a.shift + (b.shift - a.shift) * e;
+    cam.expo = Math.exp(Math.log(a.expo) + (Math.log(b.expo) - Math.log(a.expo)) * e);
+    dirty = true;
+    if (t >= 1) anim.finish();
+  }
+
+  // ---------- 그리기 ----------
+  let dirty = true;
+  let basis = null;
+
+  function camBasis() {
+    const p = Math.max(-89.5 * DEG, Math.min(89.5 * DEG, cam.pitch));
+    const f = dirOf(cam.yaw, p);
+    let r = [-f[2], 0, f[0]];
+    const rl = Math.hypot(r[0], r[2]) || 1;
+    r = [r[0] / rl, 0, r[2] / rl];
+    // 화면 위쪽 방향 = r × f
+    const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+    return { f, r, u, fp: (H / 2) / Math.tan(cam.fov / 2) };
+  }
+  function project(p) {
+    const b = basis;
+    const dx = p[0] - cam.pos[0], dy = p[1] - cam.pos[1], dz = p[2] - cam.pos[2];
+    const zc = dx * b.f[0] + dy * b.f[1] + dz * b.f[2];
+    if (zc < 0.05) return null;
+    const xc = dx * b.r[0] + dy * b.r[1] + dz * b.r[2];
+    const yc = dx * b.u[0] + dy * b.u[1] + dz * b.u[2];
+    return [W / 2 + b.fp * xc / zc, centerY() - b.fp * yc / zc, zc];
+  }
+
+  function blurGlow() {
+    // 가로·세로 상자 흐림 세 번 (성운이 부드럽게 보이도록)
+    const rad = 2, src = glow, tmp = glowTmp;
+    for (let pass = 0; pass < 3; pass++) {
+      for (let y = 0; y < GH; y++) {
+        for (let x = 0; x < GW; x++) {
+          let r = 0, g = 0, b = 0, c = 0;
+          for (let k = -rad; k <= rad; k++) {
+            const xx = x + k; if (xx < 0 || xx >= GW) continue;
+            const j = (y * GW + xx) * 3; r += src[j]; g += src[j + 1]; b += src[j + 2]; c++;
+          }
+          const o = (y * GW + x) * 3; tmp[o] = r / c; tmp[o + 1] = g / c; tmp[o + 2] = b / c;
+        }
+      }
+      for (let y = 0; y < GH; y++) {
+        for (let x = 0; x < GW; x++) {
+          let r = 0, g = 0, b = 0, c = 0;
+          for (let k = -rad; k <= rad; k++) {
+            const yy = y + k; if (yy < 0 || yy >= GH) continue;
+            const j = (yy * GW + x) * 3; r += tmp[j]; g += tmp[j + 1]; b += tmp[j + 2]; c++;
+          }
+          const o = (y * GW + x) * 3; src[o] = r / c; src[o + 1] = g / c; src[o + 2] = b / c;
+        }
+      }
+    }
+  }
+
+  function render() {
+    basis = camBasis();
+    const b = basis;
+    acc.fill(0); glow.fill(0);
+    const px = cam.pos[0], py = cam.pos[1], pz = cam.pos[2];
+    const fx = b.f[0], fy = b.f[1], fz = b.f[2];
+    const rx = b.r[0], rz = b.r[2];
+    const ux = b.u[0], uy = b.u[1], uz = b.u[2];
+    const fp = b.fp, cx = W / 2, cy = centerY(), expo = cam.expo, cg = clusterGain(), gg = gasGain();
+    const nd = DN.length;
+    for (let i = 0; i < N; i++) {
+      const dx = X[i] - px, dy = Y[i] - py, dz = Z[i] - pz;
+      const zc = dx * fx + dy * fy + dz * fz;
+      if (zc < 0.02) continue;
+      const sx = cx + fp * (dx * rx + dz * rz) / zc;
+      const sy = cy - fp * (dx * ux + dy * uy + dz * uz) / zc;
+      if (sx < 0 || sy < 0 || sx >= W || sy >= H) continue;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      // 암흑 성운이 카메라와 이 점 사이에 있으면 빛을 가린다
+      let att = 1;
+      for (let j = 0; j < nd; j++) {
+        const c = DN[j], wx = c.x - px, wy = c.y - py, wz = c.z - pz;
+        const t = (wx * dx + wy * dy + wz * dz) / d2;
+        if (t <= 0 || t >= 1) continue;
+        const ex = wx - t * dx, ey = wy - t * dy, ez = wz - t * dz, e2 = ex * ex + ey * ey + ez * ez;
+        if (e2 < c.r2) att *= Math.exp(-7 * Math.sqrt(1 - e2 / c.r2));
+      }
+      if (att < 0.02) continue;
+      if (T[i] === 2) {               // 성운 가스: 은은한 빛 버퍼에만
+        const g = L[i] * expo / (d2 + 0.3) * gg * att;
+        const gk = (((sy / GS) | 0) * GW + ((sx / GS) | 0)) * 3;
+        glow[gk] += CR[i] * g; glow[gk + 1] += CG[i] * g; glow[gk + 2] += CB[i] * g;
+        continue;
+      }
+      let fl = L[i] * expo / (d2 + 0.3) * att;
+      if (T[i]) fl *= cg;
+      if (T[i] === 3 && cg < 2) fl *= 0.12;         // 멀리서 본 구상 성단: 한 점에 별이 몰려 하얗게 타지 않도록 (주황색 유지)
+      if (fl > 4) fl = 4;
+      const ix = sx | 0, iy = sy | 0;
+      const k = (iy * W + ix) * 3;
+      acc[k] += CR[i] * fl; acc[k + 1] += CG[i] * fl; acc[k + 2] += CB[i] * fl;
+      // 가까운 별(성단을 확대했을 때)은 점을 조금 크게: 일반 별 2×2, 성단 별 3×3
+      if (d2 < 2.5 && ix > 0 && iy > 0 && ix + 1 < W && iy + 1 < H) {
+        const h = fl * 0.6, big = T[i] && cg > 2;
+        for (let oy = big ? -1 : 0; oy <= 1; oy++) {
+          for (let ox = big ? -1 : 0; ox <= 1; ox++) {
+            if (!ox && !oy) continue;
+            const kk = ((iy + oy) * W + ix + ox) * 3;
+            acc[kk] += CR[i] * h; acc[kk + 1] += CG[i] * h; acc[kk + 2] += CB[i] * h;
+          }
+        }
+      }
+      const gw = (T[i] === 3 && cg < 2) ? 0 : 1;   // 구상 성단 별은 멀리서 번지지 않게
+      if (!gw && ix > 0 && iy > 0 && ix + 1 < W && iy + 1 < H) {   // 대신 작은 십자 모양 점으로 조금 크게
+        const h = fl * 0.5;
+        for (const kk of [k - 3, k + 3, k - W * 3, k + W * 3]) {
+          acc[kk] += CR[i] * h; acc[kk + 1] += CG[i] * h; acc[kk + 2] += CB[i] * h;
+        }
+      }
+      if (gw) {
+        const gk = (((sy / GS) | 0) * GW + ((sx / GS) | 0)) * 3;
+        glow[gk] += CR[i] * fl; glow[gk + 1] += CG[i] * fl; glow[gk + 2] += CB[i] * fl;
+      }
+    }
+    blurGlow();
+    const data = img.data;
+    const G = 0.1; // 은은한 빛 세기
+    for (let y = 0; y < H; y++) {
+      const gy = y / GS, gy0 = gy | 0, ty = gy - gy0;
+      for (let x = 0; x < W; x++) {
+        const gx = x / GS, gx0 = gx | 0, tx = gx - gx0;
+        const i00 = (gy0 * GW + gx0) * 3, i10 = i00 + 3, i01 = i00 + GW * 3, i11 = i01 + 3;
+        const k = (y * W + x) * 3, o = (y * W + x) * 4;
+        for (let c = 0; c < 3; c++) {
+          const gv = (glow[i00 + c] * (1 - tx) + glow[i10 + c] * tx) * (1 - ty) +
+                     (glow[i01 + c] * (1 - tx) + glow[i11 + c] * tx) * ty;
+          const v = (acc[k + c] + gv * G) * 1.6;
+          data[o + c] = 255 * v / (1 + v);
+        }
+        data[o + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    drawOverlay();
+    drawMinimap();
+  }
+
+  // ---------- 태양계 표시와 이름표 ----------
+  let labelsOn = false;
+  function fontPx() { return W < 900 ? 17 : 24; }
+
+  function drawSunMarker() {
+    if (mode === "look" && !anim) return;
+    const s = project(SUN);
+    if (!s || s[2] < 0.5) return;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(s[0], s[1], 7, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffd54a"; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = "#fff";
+    ctx.beginPath(); ctx.arc(s[0], s[1], 13, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+
+  const FONT = getComputedStyle(document.body).fontFamily;
+  function setFont() { const fs = fontPx(); ctx.font = `bold ${fs}px ${FONT}`; return fs; }
+  function boxSize(text) { const fs = setFont(); return { w: ctx.measureText(text).width + 24, h: fs + 14 }; }
+  // 색 구분: 명칭(이름표) = 흰색, 거리 = 하늘색
+  const NAME_COLOR = "#ffffff", DIST_COLOR = "#7fd3ff";
+  function drawBox(text, x, y, w, h, color) {
+    color = color || NAME_COLOR;
+    ctx.fillStyle = "rgba(10,14,30,0.9)"; roundRect(x, y, w, h, 8); ctx.fill();
+    // 상자 테두리는 선보다 연하게
+    ctx.save(); ctx.globalAlpha = 0.4; ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    roundRect(x, y, w, h, 8); ctx.stroke(); ctx.restore();
+    setFont(); ctx.fillStyle = color; ctx.textBaseline = "middle"; ctx.textAlign = "center";
+    ctx.fillText(text, x + w / 2, y + h / 2 + 1);
+    ctx.textAlign = "left";
+  }
+  // 가리키는 선: 점(대상) → 이름표
+  function leader(ax, ay, bx, by) {
+    ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.beginPath(); ctx.arc(ax, ay, 5, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+  }
+  function dashed(x1, y1, x2, y2) {
+    ctx.save(); ctx.setLineDash([6, 6]); ctx.strokeStyle = "rgba(127,211,255,0.65)"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+  }
+  // 화살촉: (x, y) 끝에서 (ux, uy) 방향을 가리킴
+  function arrowHead(c, x, y, ux, uy, size, color) {
+    const px = -uy, py = ux;
+    c.fillStyle = color;
+    c.beginPath(); c.moveTo(x, y);
+    c.lineTo(x - ux * size + px * size * 0.5, y - uy * size + py * size * 0.5);
+    c.lineTo(x - ux * size - px * size * 0.5, y - uy * size - py * size * 0.5);
+    c.closePath(); c.fill();
+  }
+  // 거리 선: 양 끝 화살표 + 가운데 이름표. opt.ticks: 양 끝 눈금(짧은 실선)을 그릴지
+  function dimLine(x1, y1, x2, y2, text, opt) {
+    opt = opt || {};
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    if (len < 30) return;
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+    const nx = -uy * 10, ny = ux * 10;
+    ctx.strokeStyle = DIST_COLOR; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+    if (opt.ticks !== false) {
+      ctx.moveTo(x1 - nx, y1 - ny); ctx.lineTo(x1 + nx, y1 + ny);
+      ctx.moveTo(x2 - nx, y2 - ny); ctx.lineTo(x2 + nx, y2 + ny);
+    }
+    ctx.stroke();
+    arrowHead(ctx, x2, y2, ux, uy, 14, DIST_COLOR);
+    arrowHead(ctx, x1, y1, -ux, -uy, 14, DIST_COLOR);
+    const b = boxSize(text);
+    let bx = (x1 + x2) / 2 - b.w / 2, by = (y1 + y2) / 2 - b.h / 2;
+    if (opt.right) {
+      // 화살표 오른쪽 바로 옆: 상자 높이만큼의 구간에서 선이 가장 오른쪽에 오는 곳 바로 옆
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+      const lean = Math.abs(uy) > 0.2 ? (b.h / 2) * Math.abs(ux / uy) : b.w;
+      bx = mx + lean + 8; by = my - b.h / 2;
+    } else if (Math.abs(uy) < 0.2 && b.w > len - 50) {
+      // 짧은 가로선이라 글자 상자가 화살표를 가리면 상자를 선 아래로 내린다
+      by += b.h / 2 + 12;
+    }
+    drawBox(text, Math.max(8, Math.min(W - b.w - 8, bx)), by, b.w, b.h, DIST_COLOR);
+  }
+  // 이름표를 은하 옆에 세로 한 줄로 가지런히 세운다 (겹치지 않게 간격 유지)
+  function column(items, side, C, R) {
+    if (!items.length) return;
+    const gap = W < 900 ? 16 : 40, minY = W < 900 ? 90 : 120, maxY = H - (W < 900 ? 130 : 150);
+    items.forEach(it => { const b = boxSize(it.text); it.w = b.w; it.h = b.h; });
+    items.sort((a, b) => a.ay - b.ay);
+    let prev = -Infinity;
+    items.forEach(it => { it.y = Math.max(it.ay - it.h / 2, minY, prev + 16); prev = it.y + it.h; });
+    let next = Infinity;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const it = items[i];
+      it.y = Math.min(it.y, maxY - it.h, next - 16 - it.h); next = it.y;
+    }
+    items.forEach(it => {
+      it.x = side < 0 ? Math.max(8, C[0] - R - gap - it.w) : Math.min(W - it.w - 8, C[0] + R + gap);
+      leader(it.ax, it.ay, side < 0 ? it.x + it.w : it.x, it.y + it.h / 2);
+    });
+    items.forEach(it => drawBox(it.text, it.x, it.y, it.w, it.h));
+  }
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  // 위·옆에서 보기 + 이름표 켜기: 성단·성운 위치 표시 (모양과 색을 모두 다르게)
+  const MK = {
+    gc: { color: "#ffa347", label: "구상 성단" },
+    oc: { color: "#6fb6ff", label: "산개 성단" },
+    nb: { color: "#ff7ac8", label: "성운" }
+  };
+  function markShape(kind, x, y, s) {
+    ctx.strokeStyle = MK[kind].color; ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    if (kind === "gc") ctx.arc(x, y, s, 0, Math.PI * 2);                       // ○
+    else if (kind === "oc") ctx.rect(x - s, y - s, s * 2, s * 2);             // □
+    else { ctx.moveTo(x, y - s * 1.15); ctx.lineTo(x + s, y + s * 0.75); ctx.lineTo(x - s, y + s * 0.75); ctx.closePath(); } // △
+    ctx.stroke();
+  }
+  function drawMarkers() {
+    const s = W < 900 ? 4.5 : 6;
+    ctx.save();
+    const draw = (list, kind) => list.forEach(p => { const q = project(p); if (q) markShape(kind, q[0], q[1], s); });
+    // 표시가 너무 많지 않게 종류별로 몇 개만 (선생님 요청): 고르게 건너뛰며 고른다
+    const pick = (list, count) => list.filter((_, i) => i % Math.max(1, Math.round(list.length / count)) === 0).slice(0, count);
+    draw(pick(NBS, 6), "nb"); draw(pick(OCS, 8), "oc"); draw(pick(GCS, 8), "gc");
+    // 범례: 왼쪽 아래 (버튼 바로 위)
+    const fs = W < 900 ? 15 : 20;
+    ctx.font = `bold ${fs}px ${FONT}`;
+    const items = ["gc", "oc", "nb"], pad = 12, gap = 18;
+    const widths = items.map(k => ctx.measureText(MK[k].label).width + s * 2 + 10);
+    const bw = widths.reduce((a, b) => a + b, 0) + gap * (items.length - 1) + pad * 2, bh = fs + 18;
+    const ctrl = document.getElementById("controls").offsetHeight || 150;
+    const bx = 16, by = Math.max(8, H - ctrl - bh - 8);
+    ctx.fillStyle = "rgba(10,14,30,0.85)"; roundRect(bx, by, bw, bh, 10); ctx.fill();
+    let x = bx + pad;
+    items.forEach((k, i) => {
+      markShape(k, x + s, by + bh / 2, s);
+      ctx.fillStyle = MK[k].color; ctx.textBaseline = "middle"; ctx.textAlign = "left";
+      ctx.fillText(MK[k].label, x + s * 2 + 8, by + bh / 2 + 1);
+      x += widths[i] + gap;
+    });
+    ctx.restore();
+  }
+
+  function drawOverlay() {
+    drawSunMarker();
+    if (!labelsOn || anim || tween) return;
+    const s = W < 900 ? 0.6 : 1;
+    if (mode === "look") return;   // 태양계 시점 화면에는 글자를 넣지 않는다 (선생님 요청)
+
+    // 성단 확대 화면: 이름 하나만
+    if (viewId === "gc" || viewId === "oc") {
+      const main = viewId === "gc" ? GC_MAIN : OC_MAIN;
+      if (Math.hypot(orbit.target[0] - main[0], orbit.target[1] - main[1], orbit.target[2] - main[2]) > 0.01) return;
+      const p = project(main);
+      if (!p) return;
+      const text = viewId === "gc" ? "구상 성단" : "산개 성단";
+      const b = boxSize(text);
+      const off = Math.min(W, H) * 0.28;
+      const bx = Math.min(W - b.w - 8, p[0] + off), by = Math.max(100, p[1] - off);
+      leader(p[0] + off * 0.25, p[1] - off * 0.25, bx, by + b.h / 2);
+      drawBox(text, bx, by, b.w, b.h);
+      return;
+    }
+
+    // 성운 확대 화면: 세 성운 이름
+    if (viewId === "neb") {
+      const tv = views.neb().target;
+      if (Math.hypot(orbit.target[0] - tv[0], orbit.target[1] - tv[1], orbit.target[2] - tv[2]) > 0.01) return;
+      const pts = [["방출 성운", NEB_MAIN], ["반사 성운", RN_MAIN], ["암흑 성운", [DN_MAIN[0], DN_MAIN[1], DN_MAIN[2]]]]
+        .map(([t, p]) => ({ t, q: project(p) })).filter(o => o.q);
+      if (!pts.length) return;
+      const off = Math.min(W, H) * 0.26;
+      // 이름표 방향: 반사 = 왼쪽 위, 방출 = 오른쪽 위, 암흑 = 오른쪽 아래 (서로, 그리고 암흑 성운을 가리지 않게)
+      const DIRS = { "반사 성운": [-0.6, -0.8], "방출 성운": [0.1, -1], "암흑 성운": [0.5, -0.85] };
+      const boxes = pts.map(o => {
+        const vx = DIRS[o.t][0], vy = DIRS[o.t][1];
+        const b = boxSize(o.t);
+        const bx = Math.max(8, Math.min(W - b.w - 8, o.q[0] + vx * off - b.w / 2));
+        const by = Math.max(100, Math.min(H - b.h - (W < 900 ? 130 : 150), o.q[1] + vy * off - b.h / 2));
+        // 선은 대상에서 조금 떨어진 곳부터 (반사 성운의 별, 암흑 성운을 가리지 않게)
+        const gap = Math.min(W, H) * 0.05;
+        leader(o.q[0] + vx * gap, o.q[1] + vy * gap, bx + b.w / 2, by + b.h / 2);
+        return { t: o.t, bx, by, b };
+      });
+      boxes.forEach(o => drawBox(o.t, o.bx, o.by, o.b.w, o.b.h));
+      return;
+    }
+
+    // 위·옆에서 보기: 처음 위치(은하 중심 기준)일 때만
+    if (!isOrigin(orbit.target)) return;
+    const C = project([0, 0, 0]);
+    if (!C) return;
+    const rv = basis.r;
+    const E1 = project([-rv[0] * R_MAX, 0, -rv[2] * R_MAX]);
+    const E2 = project([rv[0] * R_MAX, 0, rv[2] * R_MAX]);
+    if (!E1 || !E2) return;
+    const R = Math.hypot(E2[0] - C[0], E2[1] - C[1]);
+    const S = project(SUN);
+    const top = Math.abs(cam.pitch) > 45 * DEG;
+    drawMarkers();
+
+    if (top) {
+      // 은하 가장자리(반지름 15000 pc)를 점선 원으로
+      ctx.save(); ctx.setLineDash([10, 8]); ctx.strokeStyle = "rgba(127,211,255,0.6)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(C[0], C[1], R, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      // 지름: 은하 아래에 가로선
+      const yd = Math.min(C[1] + R + 40 * s, H - (W < 900 ? 110 : 130));
+      dashed(E1[0], E1[1], E1[0], yd); dashed(E2[0], E2[1], E2[0], yd);
+      dimLine(E1[0], yd, E2[0], yd, "지름 약 30000 pc (약 10만 광년)", { ticks: false });
+      // 은하 중심 ~ 태양계 (태양계 표시와 화살표가 겹치지 않게 태양계 쪽 끝을 조금 줄인다)
+      if (S) {
+        const dx = S[0] - C[0], dy = S[1] - C[1], d = Math.hypot(dx, dy) || 1, cut = 20;
+        // 글자는 화살표 오른쪽 바로 옆
+        dimLine(C[0], C[1], S[0] - dx / d * cut, S[1] - dy / d * cut, "약 8500 pc (약 3만 광년)", { ticks: false, right: true });
+      }
+
+      // 이름표: 태양계 쪽 줄과 반대쪽 줄로 나눈다
+      const sunSide = S && S[0] < C[0] ? -1 : 1;
+      const same = [], other = [];
+      if (S) same.push({ text: "태양계", ax: S[0], ay: S[1] });
+      // 나선팔: 태양계 쪽에서 태양계와 떨어진 곳
+      let best = null;
+      for (let k = 0; k < 4; k++) {
+        const p = armPoint(k, 12.5), q = project([p[0], 0, p[1]]);
+        if (!q) continue;
+        const far = S ? Math.hypot(q[0] - S[0], q[1] - S[1]) : 999;
+        const score = (q[0] - C[0]) * sunSide + (far > 150 ? 1000 : 0);
+        if (!best || score > best.score) best = { q, score };
+      }
+      if (best) same.push({ text: "나선팔", ax: best.q[0], ay: best.q[1] });
+      other.push({ text: "은하 중심", ax: C[0], ay: C[1] });
+      column(same, sunSide, C, R);
+      column(other, -sunSide, C, R);
+    } else {
+      // 옆에서 보기: 아래쪽에 거리 선 두 줄, 위쪽에 이름표
+      const y85 = C[1] + 70 * s, yd = y85 + Math.max(75 * s, 72);
+      dashed(E1[0], E1[1], E1[0], yd); dashed(E2[0], E2[1], E2[0], yd);
+      dimLine(E1[0], yd, E2[0], yd, "지름 약 30000 pc (약 10만 광년)");
+      if (S) {
+        dashed(C[0], C[1], C[0], y85); dashed(S[0], S[1], S[0], y85);
+        dimLine(C[0], y85, S[0], y85, "약 8500 pc (약 3만 광년)");
+      }
+      const yl = C[1] - 150 * s;
+      const items = [{ text: "중심부", ax: C[0], ay: C[1] - 18 * s }];
+      if (S) items.push({ text: "태양계", ax: S[0], ay: S[1] });
+      items.forEach(it => { const b = boxSize(it.text); it.w = b.w; it.h = b.h; it.x = it.ax - b.w / 2; it.y = yl - b.h / 2; });
+      if (items.length === 2) {           // 가로로 겹치면 벌린다
+        const [a, b] = items[0].x < items[1].x ? items : [items[1], items[0]];
+        const over = a.x + a.w + 20 - b.x;
+        if (over > 0) { a.x -= over / 2; b.x += over / 2; }
+      }
+      items.forEach(it => { it.x = Math.max(8, Math.min(W - it.w - 8, it.x));
+        leader(it.ax, it.ay, it.x + it.w / 2, it.y + it.h); });
+      items.forEach(it => drawBox(it.text, it.x, it.y, it.w, it.h));
+    }
+  }
+
+  // ---------- 작은 지도 (태양계 시점에서만) ----------
+  const mini = document.getElementById("minimap");
+  const miniLabel = document.getElementById("minimap-label");
+  const mctx = mini.getContext("2d");
+  const miniBase = document.createElement("canvas");
+  miniBase.width = 200; miniBase.height = 200;
+  (function buildMini() {
+    const c = miniBase.getContext("2d");
+    const im = c.createImageData(200, 200), a = new Float32Array(200 * 200 * 3);
+    const sc = 92 / (R_MAX + 1);
+    for (let i = 0; i < N; i += 2) {
+      const x = (100 + X[i] * sc) | 0, y = (100 + Z[i] * sc) | 0;
+      if (x < 0 || y < 0 || x >= 200 || y >= 200) continue;
+      const k = (y * 200 + x) * 3;
+      a[k] += CR[i] * 0.25; a[k + 1] += CG[i] * 0.25; a[k + 2] += CB[i] * 0.25;
+    }
+    for (let i = 0; i < 200 * 200; i++) {
+      for (let ch = 0; ch < 3; ch++) im.data[i * 4 + ch] = 255 * (1 - Math.exp(-a[i * 3 + ch]));
+      im.data[i * 4 + 3] = 255;
+    }
+    c.putImageData(im, 0, 0);
+  })();
+
+  function drawMinimap() {
+    const show = mode === "look" && !anim;
+    mini.style.display = show ? "block" : "none";
+    miniLabel.style.display = show ? "block" : "none";
+    if (!show) return;
+    const sz = mini.clientWidth || 200;
+    if (mini.width !== sz) { mini.width = sz; mini.height = sz; }
+    const k = sz / 200;
+    mctx.clearRect(0, 0, sz, sz);
+    mctx.save();
+    mctx.beginPath(); mctx.arc(sz / 2, sz / 2, sz / 2 - 2, 0, Math.PI * 2); mctx.clip();
+    mctx.drawImage(miniBase, 0, 0, sz, sz);
+    mctx.restore();
+    const sc = 92 / (R_MAX + 1) * k;
+    const sx = sz / 2 + SUN[0] * sc, sy = sz / 2 + SUN[2] * sc;
+    const f = dirOf(cam.yaw, 0);
+    const len = 46 * k;
+    // 바라보는 방향 부채꼴
+    const ang = Math.atan2(f[2], f[0]), half = cam.fov * (W / H) / 2;
+    mctx.fillStyle = "rgba(255,213,74,0.35)";
+    mctx.beginPath(); mctx.moveTo(sx, sy);
+    mctx.arc(sx, sy, len * 1.6, ang - Math.min(half, 1.2), ang + Math.min(half, 1.2)); mctx.closePath(); mctx.fill();
+    // 바라보는 방향 화살표 (빨간색)
+    mctx.strokeStyle = "#ff3b3b"; mctx.lineWidth = 3;
+    const fl = Math.hypot(f[0], f[2]) || 1, ux = f[0] / fl, uy = f[2] / fl;
+    const ex = sx + ux * len, ey = sy + uy * len;
+    mctx.beginPath(); mctx.moveTo(sx, sy); mctx.lineTo(ex - ux * 8 * k, ey - uy * 8 * k); mctx.stroke();
+    arrowHead(mctx, ex, ey, ux, uy, 16 * k, "#ff3b3b");
+    mctx.beginPath(); mctx.arc(sx, sy, 6 * k + 2, 0, Math.PI * 2); mctx.fillStyle = "#ffd54a"; mctx.fill();
+    mctx.strokeStyle = "#fff"; mctx.lineWidth = 2; mctx.stroke();
+  }
+
+  // ---------- 조작 ----------
+  const pointers = new Map();
+  let pinchStart = null;
+
+  canvas.addEventListener("pointerdown", e => {
+    canvas.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    canvas.classList.add("dragging");
+    if (anim) anim.finish();
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinchStart = { d: Math.hypot(a.x - b.x, a.y - b.y), dist: orbit.dist, fov: cam.fov };
+    }
+  });
+  canvas.addEventListener("pointermove", e => {
+    const prev = pointers.get(e.pointerId);
+    if (!prev) return;
+    const cur = { x: e.clientX, y: e.clientY };
+    pointers.set(e.pointerId, cur);
+    if (pointers.size === 2 && pinchStart) {
+      const [a, b] = [...pointers.values()];
+      zoomBy(pinchStart.d / Math.max(10, Math.hypot(a.x - b.x, a.y - b.y)), pinchStart);
+      return;
+    }
+    const dx = cur.x - prev.x, dy = cur.y - prev.y;
+    const rot = 3.2 / Math.max(W, H);
+    if (mode === "orbit") {
+      orbit.yaw -= dx * rot * 1.4;
+      orbit.pitch = Math.max(-89.4 * DEG, Math.min(89.4 * DEG, orbit.pitch + dy * rot * 1.4));
+    } else {
+      const s = cam.fov / H;
+      look.yaw += dx * s;
+      look.pitch = Math.max(-85 * DEG, Math.min(85 * DEG, look.pitch + dy * s));
+    }
+    applyState(); dirty = true;
+  });
+  function endPointer(e) {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) pinchStart = null;
+    if (pointers.size === 0) canvas.classList.remove("dragging");
+  }
+  canvas.addEventListener("pointerup", endPointer);
+  canvas.addEventListener("pointercancel", endPointer);
+
+  function zoomBy(f, base) {
+    if (mode === "orbit") {
+      const d0 = base ? base.dist : orbit.dist;
+      orbit.dist = Math.max(0.06, Math.min(160, d0 * f));
+    } else {
+      const f0 = base ? base.fov : cam.fov;
+      cam.fov = Math.max(25 * DEG, Math.min(100 * DEG, f0 * f));
+    }
+    applyState(); dirty = true;
+  }
+  canvas.addEventListener("wheel", e => {
+    e.preventDefault();
+    if (anim) anim.finish();
+    zoomBy(Math.exp(e.deltaY * 0.0012));
+  }, { passive: false });
+
+  // 두 번 누르면 그 자리를 새 중심으로 (확대해서 성단을 찾아볼 때)
+  canvas.addEventListener("dblclick", e => {
+    if (mode !== "orbit" || anim) return;
+    const b = camBasis();
+    const xc = (e.clientX - W / 2) / b.fp, yc = -(e.clientY - centerY()) / b.fp;
+    const d = [b.f[0] + b.r[0] * xc + b.u[0] * yc, b.f[1] + b.r[1] * xc + b.u[1] * yc, b.f[2] + b.r[2] * xc + b.u[2] * yc];
+    let hit = null;
+    // 원반 평면(높이 = 지금 중심의 높이)과 만나는 점
+    const ty = orbit.target[1];
+    if (Math.abs(d[1]) > 0.05) {
+      const t = (ty - cam.pos[1]) / d[1];
+      if (t > 0) hit = [cam.pos[0] + d[0] * t, ty, cam.pos[2] + d[2] * t];
+    }
+    // 옆에서 볼 때처럼 평면과 잘 안 만나면 지금 중심과 같은 거리의 점
+    if (!hit) {
+      const dl = Math.hypot(d[0], d[1], d[2]), t = orbit.dist / dl;
+      hit = [cam.pos[0] + d[0] * t, cam.pos[1] + d[1] * t, cam.pos[2] + d[2] * t];
+    }
+    if (Math.hypot(hit[0], hit[2]) > R_MAX + 3) return;
+    tween = { t0: performance.now(), from: orbit.target.slice(), to: hit };
+    orbit.target = orbit.target.slice();
+    document.querySelectorAll("#controls button[data-view]").forEach(bt => bt.classList.remove("active"));
+    viewId = "free";
+    document.getElementById("capTitle").textContent = "자유롭게 살펴보기";
+    dirty = true;
+  });
+
+  document.querySelectorAll("#controls button[data-view]").forEach(b => {
+    b.addEventListener("click", () => setView(b.dataset.view));
+  });
+  const labelBtn = document.getElementById("labelBtn");
+  labelBtn.addEventListener("click", () => {
+    labelsOn = !labelsOn;
+    labelBtn.textContent = labelsOn ? "이름표 끄기" : "이름표 켜기";
+    labelBtn.setAttribute("aria-pressed", labelsOn ? "true" : "false");
+    dirty = true;
+  });
+
+  window.addEventListener("resize", resize);
+
+  function loop(now) {
+    stepAnim(now);
+    if (dirty) { dirty = false; render(); }
+    requestAnimationFrame(loop);
+  }
+
+  resize();
+  setView("top", true);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
